@@ -10,6 +10,10 @@ export interface ServiceFormState {
     command: string;
     workingDir: string;
     extraEnvText: string;
+    /** Extra directories prepended to PATH, in OS path-list syntax. */
+    extraPath: string;
+    /** Merge the interactive login shell env (dot-pkgs ResolveLoginEnvs). */
+    inheritShellEnv: boolean;
     /** One upgrade step per line; blank lines are ignored. */
     upgradePreStopText: string;
     upgradePostStopText: string;
@@ -34,6 +38,8 @@ export function createDefaultForm(workingDir = ''): ServiceFormState {
         command: '',
         workingDir,
         extraEnvText: '',
+        extraPath: '',
+        inheritShellEnv: false,
         upgradePreStopText: '',
         upgradePostStopText: '',
         upgradeTimeout: '',
@@ -59,6 +65,8 @@ export function toFormState(service: ServiceStatus): ServiceFormState {
         command: service.command,
         workingDir: service.workingDir || '',
         extraEnvText: stringifyEnvMap(service.extraEnv),
+        extraPath: service.extraPath || '',
+        inheritShellEnv: !!service.inheritInteractiveShellEnv,
         upgradePreStopText: (service.upgradePreStopCmds || []).join('\n'),
         upgradePostStopText: (service.upgradePostStopCmds || []).join('\n'),
         upgradeTimeout: service.upgradeTimeoutSeconds === undefined ? '' : String(service.upgradeTimeoutSeconds),

@@ -210,7 +210,11 @@ type upgradeRunner struct {
 // service working directory and environment. Output is streamed, mirrored into
 // the service log, and tailed for error reporting.
 func (r *upgradeRunner) run(step ServiceUpgradeStep) error {
-	env := mergeUpgradeEnv(buildServiceEnv(r.def), r.extraEnv)
+	startEnv, shellEnvErr := buildServiceEnvForStart(r.def)
+	env := mergeUpgradeEnv(startEnv, r.extraEnv)
+	if shellEnvErr != "" && r.emit != nil {
+		r.emit(UpgradeEvent{Kind: UpgradeEventLog, Message: "interactive shell env unavailable, using process env: " + shellEnvErr})
+	}
 
 	logFile, err := r.openLog()
 	if err != nil {

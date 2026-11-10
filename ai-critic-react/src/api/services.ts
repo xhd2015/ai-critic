@@ -24,6 +24,12 @@ export interface ServiceStatus {
     command: string;
     workingDir?: string;
     extraEnv?: Record<string, string>;
+    /** Extra directories prepended to PATH, in OS path-list syntax. */
+    extraPath?: string;
+    /** Merge the interactive login shell env into the service env at start. */
+    inheritInteractiveShellEnv?: boolean;
+    /** Non-fatal reason the interactive shell env could not be resolved. */
+    shellEnvError?: string;
     effectivePath?: string;
     logPath: string;
     status: 'starting' | 'running' | 'stopped' | 'error' | 'unknown';
@@ -101,6 +107,10 @@ export interface ServiceDefinition {
     command: string;
     workingDir?: string;
     extraEnv?: Record<string, string>;
+    /** Extra directories prepended to PATH, in OS path-list syntax. */
+    extraPath?: string;
+    /** Merge the interactive login shell env into the service env at start. */
+    inheritInteractiveShellEnv?: boolean;
     portForward?: ServicePortForward;
     upgradeTarget?: string;
     upgradePreStopCmds?: string[];

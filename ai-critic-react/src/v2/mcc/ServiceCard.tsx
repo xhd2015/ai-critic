@@ -3,7 +3,7 @@ import { consumeSSEStream } from '../../api/sse';
 import { streamLogFile } from '../../api/logs';
 import { upgradeServiceStream, type ServiceStatus } from '../../api/services';
 import { LogViewer } from '../LogViewer';
-import { appendLogLine, formatTime, stringifyEnvMap } from './serviceFormat';
+import { appendLogLine, countPathDirs, formatTime, stringifyEnvMap } from './serviceFormat';
 
 export interface ServiceCardProps {
     service: ServiceStatus;
@@ -112,8 +112,33 @@ export function ServiceCard({ service, onEdit, onStart, onStop, onRestart, onDis
             </div>
 
             <div className="mcc-service-env-block">
-                <div className="mcc-service-env-title">Effective PATH</div>
+                <div className="mcc-service-env-title">
+                    Effective PATH
+                    {(service.extraPath || service.inheritInteractiveShellEnv) && (
+                        <span className="mcc-service-env-chips">
+                            {service.extraPath && (
+                                <span className="mcc-service-chip" title={service.extraPath}>
+                                    +PATH {countPathDirs(service.extraPath)}
+                                </span>
+                            )}
+                            {service.inheritInteractiveShellEnv && (
+                                <span className="mcc-service-chip">shell env</span>
+                            )}
+                        </span>
+                    )}
+                </div>
                 <div className="mcc-service-env-value">{service.effectivePath || 'Unavailable'}</div>
+                {service.extraPath && (
+                    <>
+                        <div className="mcc-service-env-title">Extra PATH</div>
+                        <div className="mcc-service-env-value">{service.extraPath}</div>
+                    </>
+                )}
+                {service.shellEnvError && (
+                    <div className="mcc-service-env-warning">
+                        Shell env unavailable: {service.shellEnvError}
+                    </div>
+                )}
                 {service.extraEnv && Object.keys(service.extraEnv).length > 0 && (
                     <>
                         <div className="mcc-service-env-title">Extra Env</div>

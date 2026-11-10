@@ -58,6 +58,14 @@ export function isServiceRunning(service: ServiceStatus): boolean {
     return service.pid > 0 || service.status === 'running' || service.status === 'starting';
 }
 
+/** countPathDirs counts non-empty entries in an OS path list. */
+export function countPathDirs(value: string): number {
+    return value
+        .split(':')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0).length;
+}
+
 export function disableMessage(service: ServiceStatus): string {
     return isServiceRunning(service)
         ? "The server won't stop immediately unless you manually stop it"

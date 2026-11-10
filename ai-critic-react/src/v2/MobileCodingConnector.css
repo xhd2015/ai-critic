@@ -1360,6 +1360,10 @@ a.mcc-tunnel-mapping-hostname:hover {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    /* Phone width is driven by the 300px+ wide action row inside each card;
+       without this the whole page grows to the card's min-content width. */
+    min-width: 0;
+    max-width: 100%;
 }
 
 /* User Services / System Services groups inside the Services section. */
@@ -1454,6 +1458,17 @@ a.mcc-tunnel-mapping-hostname:hover {
 
 .mcc-service-card {
     background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96));
+    min-width: 0;
+    max-width: 100%;
+}
+
+.mcc-service-card-title-row {
+    min-width: 0;
+}
+
+.mcc-service-card .mcc-port-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .mcc-service-card--running {
@@ -1616,6 +1631,46 @@ a.mcc-tunnel-mapping-hostname:hover {
 
 .mcc-service-env-title:not(:first-child) {
     margin-top: 10px;
+}
+
+.mcc-service-env-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.mcc-service-env-chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 0;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.mcc-service-chip {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(96, 165, 250, 0.12);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    color: #93c5fd;
+    font-size: 10.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.mcc-service-env-warning {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    font-size: 11.5px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 
 .mcc-service-env-value {
@@ -1801,7 +1856,13 @@ a.mcc-tunnel-mapping-hostname:hover {
 
 .mcc-port-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+    min-width: 0;
+}
+
+.mcc-port-actions .mcc-port-action-btn {
+    min-width: 0;
 }
 
 .mcc-port-action-btn {
@@ -1847,6 +1908,31 @@ a.mcc-tunnel-mapping-hostname:hover {
 .mcc-port-clone:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Phone: service cards carry up to 9 actions (Edit/Start/Restart/Stop/Disable/
+   Upgrade/Logs/Delete). A single unwrapped flex row needs ~580px, which used to
+   widen the whole page on a 390px viewport. Lay them out two-up, Delete full
+   width, and let the labels shrink instead of the card. */
+@media (max-width: 720px) {
+    .mcc-service-card .mcc-port-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .mcc-service-card .mcc-port-actions .mcc-port-action-btn {
+        width: 100%;
+        padding: 8px 10px;
+        font-size: 12.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .mcc-service-card .mcc-port-actions .mcc-port-stop {
+        grid-column: 1 / -1;
+    }
 }
 
 .mcc-add-port-section {
@@ -1964,6 +2050,48 @@ a.mcc-tunnel-mapping-hostname:hover {
     margin-top: 6px;
     color: #94a3b8;
     font-size: 12px;
+}
+
+.mcc-service-field-hint code {
+    font-size: 11.5px;
+    color: #cbd5e1;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+/* Checkbox row, e.g. "Inherit interactive shell env". */
+.mcc-service-inherit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(51, 65, 85, 0.6);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+    border-radius: 10px;
+    color: #cbd5e1;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.mcc-service-inherit:hover {
+    background: rgba(96, 165, 250, 0.1);
+    border-color: rgba(96, 165, 250, 0.4);
+}
+
+.mcc-service-inherit input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #3b82f6;
+    cursor: pointer;
+}
+
+.mcc-service-inherit span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .mcc-service-env-input {

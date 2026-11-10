@@ -53,12 +53,21 @@ type ServicePortForward struct {
 }
 
 type ServiceDefinition struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Command     string              `json:"command"`
-	WorkingDir  string              `json:"workingDir,omitempty"`
-	ExtraEnv    map[string]string   `json:"extraEnv,omitempty"`
-	PortForward *ServicePortForward `json:"portForward,omitempty"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Command    string            `json:"command"`
+	WorkingDir string            `json:"workingDir,omitempty"`
+	ExtraEnv   map[string]string `json:"extraEnv,omitempty"`
+	// ExtraPath is a PATH-style directory list prepended to the service PATH on
+	// top of whatever the process/shell env already provides. It is for tool
+	// shims (nvm, volta, ~/bin) without rewriting PATH wholesale.
+	ExtraPath string `json:"extraPath,omitempty"`
+	// InheritInteractiveShellEnv merges the environment of an interactive login
+	// shell ($SHELL -lic 'env -0') into the service env, so tools exported from
+	// ~/.zshrc or ~/.bashrc resolve like they do in a terminal. It is resolved on
+	// every start; a probe failure is reported, never fatal.
+	InheritInteractiveShellEnv bool                `json:"inheritInteractiveShellEnv,omitempty"`
+	PortForward                *ServicePortForward `json:"portForward,omitempty"`
 	// UpgradeTarget remembers the remote binary path used by remote-agent
 	// service upgrade. It does not affect the running command itself.
 	UpgradeTarget string `json:"upgradeTarget,omitempty"`
@@ -99,24 +108,29 @@ type ServicePortForwardStatus struct {
 }
 
 type ServiceStatus struct {
-	ID             string                    `json:"id"`
-	Name           string                    `json:"name"`
-	Kind           ServiceKind               `json:"kind"`
-	Description    string                    `json:"description,omitempty"`
-	Command        string                    `json:"command"`
-	WorkingDir     string                    `json:"workingDir,omitempty"`
-	ExtraEnv       map[string]string         `json:"extraEnv,omitempty"`
-	EffectivePath  string                    `json:"effectivePath,omitempty"`
-	LogPath        string                    `json:"logPath"`
-	Status         string                    `json:"status"`
-	PID            int                       `json:"pid"`
-	LastStartedAt  string                    `json:"lastStartedAt,omitempty"`
-	LastExitedAt   string                    `json:"lastExitedAt,omitempty"`
-	LastExitError  string                    `json:"lastExitError,omitempty"`
-	DesiredRunning bool                      `json:"desiredRunning"`
-	Enabled        bool                      `json:"enabled"`
-	PortForward    *ServicePortForwardStatus `json:"portForward,omitempty"`
-	UpgradeTarget  string                    `json:"upgradeTarget,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Kind        ServiceKind       `json:"kind"`
+	Description string            `json:"description,omitempty"`
+	Command     string            `json:"command"`
+	WorkingDir  string            `json:"workingDir,omitempty"`
+	ExtraEnv    map[string]string `json:"extraEnv,omitempty"`
+	ExtraPath   string            `json:"extraPath,omitempty"`
+	// InheritInteractiveShellEnv mirrors the definition so the GUI can show the
+	// toggle's state; ShellEnvError reports the last start-time probe failure.
+	InheritInteractiveShellEnv bool                      `json:"inheritInteractiveShellEnv,omitempty"`
+	ShellEnvError              string                    `json:"shellEnvError,omitempty"`
+	EffectivePath              string                    `json:"effectivePath,omitempty"`
+	LogPath                    string                    `json:"logPath"`
+	Status                     string                    `json:"status"`
+	PID                        int                       `json:"pid"`
+	LastStartedAt              string                    `json:"lastStartedAt,omitempty"`
+	LastExitedAt               string                    `json:"lastExitedAt,omitempty"`
+	LastExitError              string                    `json:"lastExitError,omitempty"`
+	DesiredRunning             bool                      `json:"desiredRunning"`
+	Enabled                    bool                      `json:"enabled"`
+	PortForward                *ServicePortForwardStatus `json:"portForward,omitempty"`
+	UpgradeTarget              string                    `json:"upgradeTarget,omitempty"`
 	// UpgradePreStopCmds and UpgradePostStopCmds mirror the definition so a
 	// service update round-trip preserves them.
 	UpgradePreStopCmds    []string `json:"upgradePreStopCmds,omitempty"`
@@ -270,14 +284,18 @@ type serviceUpgradeTargetSelection struct {
 }
 
 type serviceProcess struct {
-	def                 ServiceDefinition
-	cmd                 *exec.Cmd
-	pid                 int
-	status              string
-	logPath             string
-	lastStartedAt       string
-	lastExitedAt        string
-	lastExitError       string
+	def           ServiceDefinition
+	cmd           *exec.Cmd
+	pid           int
+	status        string
+	logPath       string
+	lastStartedAt string
+	lastExitedAt  string
+	lastExitError string
+	// shellEnvError and effectivePath capture the env actually used by the last
+	// start, so status reporting never has to re-probe the login shell.
+	shellEnvError       string
+	effectivePath       string
 	desired             bool
 	stopRequested       bool
 	ownedForward        bool
@@ -643,13 +661,14 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition) []ServiceStatu
 	result := make([]ServiceStatus, 0, len(defs))
 	for _, def := range defs {
 		proc := m.processes[def.ID]
-		serviceEnv := buildServiceEnv(def)
 		logPath := m.serviceLogPath(def.ID)
 		status := StatusStopped
 		pid := 0
 		lastStartedAt := ""
 		lastExitedAt := ""
 		lastExitError := ""
+		shellEnvError := ""
+		effectivePath := ""
 		desired := true
 		ownedForward := false
 		if proc != nil {
@@ -658,6 +677,8 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition) []ServiceStatu
 			lastStartedAt = proc.lastStartedAt
 			lastExitedAt = proc.lastExitedAt
 			lastExitError = proc.lastExitError
+			shellEnvError = proc.shellEnvError
+			effectivePath = proc.effectivePath
 			desired = proc.desired
 			ownedForward = proc.ownedForward
 			if proc.logPath != "" {
@@ -669,6 +690,11 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition) []ServiceStatu
 					status = StatusStopped
 				}
 			}
+		}
+		if effectivePath == "" {
+			// No start yet: show the static PATH layers. The interactive shell
+			// env is deliberately not probed here; this runs on every list poll.
+			effectivePath = lookupEnvValue(buildServiceEnv(def), "PATH")
 		}
 
 		var pfStatus *ServicePortForwardStatus
@@ -699,31 +725,34 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition) []ServiceStatu
 		}
 
 		result = append(result, ServiceStatus{
-			ID:                    def.ID,
-			Name:                  def.Name,
-			Kind:                  ServiceKindUser,
-			Command:               def.Command,
-			WorkingDir:            def.WorkingDir,
-			ExtraEnv:              cloneStringMap(def.ExtraEnv),
-			EffectivePath:         lookupEnvValue(serviceEnv, "PATH"),
-			LogPath:               logPath,
-			Status:                status,
-			PID:                   pid,
-			LastStartedAt:         lastStartedAt,
-			LastExitedAt:          lastExitedAt,
-			LastExitError:         lastExitError,
-			DesiredRunning:        desired,
-			Enabled:               serviceEnabled(def),
-			PortForward:           pfStatus,
-			UpgradeTarget:         def.UpgradeTarget,
-			UpgradePreStopCmds:    cloneCmdList(def.UpgradePreStopCmds),
-			UpgradePostStopCmds:   cloneCmdList(def.UpgradePostStopCmds),
-			UpgradeTimeoutSeconds: cloneIntPtr(def.UpgradeTimeoutSeconds),
-			RequireAuth:           def.RequireAuth,
-			AuthUser:              def.AuthUser,
-			AuthTokenMode:         def.AuthTokenMode,
-			AuthToken:             def.AuthToken,
-			AuthTokens:            inspectAuthTokens(def),
+			ID:                         def.ID,
+			Name:                       def.Name,
+			Kind:                       ServiceKindUser,
+			Command:                    def.Command,
+			WorkingDir:                 def.WorkingDir,
+			ExtraEnv:                   cloneStringMap(def.ExtraEnv),
+			ExtraPath:                  def.ExtraPath,
+			InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
+			ShellEnvError:              shellEnvError,
+			EffectivePath:              effectivePath,
+			LogPath:                    logPath,
+			Status:                     status,
+			PID:                        pid,
+			LastStartedAt:              lastStartedAt,
+			LastExitedAt:               lastExitedAt,
+			LastExitError:              lastExitError,
+			DesiredRunning:             desired,
+			Enabled:                    serviceEnabled(def),
+			PortForward:                pfStatus,
+			UpgradeTarget:              def.UpgradeTarget,
+			UpgradePreStopCmds:         cloneCmdList(def.UpgradePreStopCmds),
+			UpgradePostStopCmds:        cloneCmdList(def.UpgradePostStopCmds),
+			UpgradeTimeoutSeconds:      cloneIntPtr(def.UpgradeTimeoutSeconds),
+			RequireAuth:                def.RequireAuth,
+			AuthUser:                   def.AuthUser,
+			AuthTokenMode:              def.AuthTokenMode,
+			AuthToken:                  def.AuthToken,
+			AuthTokens:                 inspectAuthTokens(def),
 		})
 	}
 	return result
@@ -740,6 +769,11 @@ func (m *Manager) CreateOrUpdateNoRestart(def ServiceDefinition) (*ServiceStatus
 func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*ServiceStatus, error) {
 	def.WorkingDir = normalizeWorkingDir(def.WorkingDir)
 	def.ExtraEnv = normalizeExtraEnv(def.ExtraEnv)
+	normalizedExtraPath, err := procenv.NormalizeExtraPath(def.ExtraPath)
+	if err != nil {
+		return nil, fmt.Errorf("extra path: %w", err)
+	}
+	def.ExtraPath = normalizedExtraPath
 	def.UpgradeTarget = strings.TrimSpace(def.UpgradeTarget)
 	def.UpgradePreStopCmds = normalizeUpgradeCmds(def.UpgradePreStopCmds)
 	def.UpgradePostStopCmds = normalizeUpgradeCmds(def.UpgradePostStopCmds)
@@ -1156,7 +1190,10 @@ func (m *Manager) start(id string, force bool) error {
 	startMarker := fmt.Sprintf("\n[%s] starting service %s\n", time.Now().Format(time.RFC3339), def.Name)
 	_, _ = logFile.WriteString(startMarker)
 
-	serviceEnv := buildServiceEnv(def)
+	serviceEnv, shellEnvErr := buildServiceEnvForStart(def)
+	if shellEnvErr != "" {
+		_, _ = logFile.WriteString(fmt.Sprintf("[%s] interactive shell env unavailable, using process env: %s\n", time.Now().Format(time.RFC3339), shellEnvErr))
+	}
 	shellCommand := def.Command
 	if pathVal := lookupEnvValue(serviceEnv, "PATH"); pathVal != "" {
 		// Keep login-shell behavior, but restore the resolved PATH after
@@ -1202,6 +1239,8 @@ func (m *Manager) start(id string, force bool) error {
 	proc.runStartedAt = startedAt
 	proc.nextRestartAt = time.Time{}
 	proc.lastExitError = ""
+	proc.shellEnvError = shellEnvErr
+	proc.effectivePath = lookupEnvValue(serviceEnv, "PATH")
 	m.mu.Unlock()
 
 	// Persist the pid so a later instance can reclaim this process if it is
@@ -1715,6 +1754,9 @@ func validateDefinition(def ServiceDefinition) error {
 			return fmt.Errorf("invalid environment variable name: %s", key)
 		}
 	}
+	if _, err := procenv.NormalizeExtraPath(def.ExtraPath); err != nil {
+		return fmt.Errorf("extra path: %w", err)
+	}
 	if def.PortForward != nil {
 		if def.PortForward.Port <= 0 || def.PortForward.Port > 65535 {
 			return fmt.Errorf("service port must be between 1 and 65535")
@@ -1778,6 +1820,12 @@ func definitionChanged(oldDef ServiceDefinition, newDef ServiceDefinition) bool 
 		return true
 	}
 	if !stringMapEqual(oldDef.ExtraEnv, newDef.ExtraEnv) {
+		return true
+	}
+	if oldDef.ExtraPath != newDef.ExtraPath {
+		return true
+	}
+	if oldDef.InheritInteractiveShellEnv != newDef.InheritInteractiveShellEnv {
 		return true
 	}
 	if oldDef.RequireAuth != newDef.RequireAuth ||
@@ -2019,8 +2067,38 @@ func normalizeExtraEnv(extraEnv map[string]string) map[string]string {
 	return normalized
 }
 
+// buildServiceEnv builds the static PATH/env layers for a service definition:
+// process env, Extra PATH prepended, Extra Env overrides, lookup-path fill-in.
+// It never probes an interactive shell, so it stays cheap enough for status
+// polling (buildStatusListLocked runs on every list request).
 func buildServiceEnv(def ServiceDefinition) []string {
-	return procenv.BuildManagedEnv(def.ExtraEnv)
+	env, _ := procenv.BuildManagedEnvWithOptions(procenv.Options{
+		Extra:     def.ExtraEnv,
+		ExtraPath: def.ExtraPath,
+	})
+	return env
+}
+
+// resolveStartEnv is the procenv entry point for real starts. It is a variable
+// so tests can exercise the interactive-shell failure path without spawning a
+// login shell.
+var resolveStartEnv = procenv.BuildManagedEnvWithOptions
+
+// buildServiceEnvForStart builds the env a real service start (or upgrade step)
+// uses. Unlike buildServiceEnv it honors InheritInteractiveShellEnv, which runs
+// `$SHELL -lic 'env -0'` once per start. A probe failure is returned as a
+// human-readable message while the env stays usable: every other layer applies
+// and bash -lc still reads login profiles on its own.
+func buildServiceEnvForStart(def ServiceDefinition) ([]string, string) {
+	env, err := resolveStartEnv(procenv.Options{
+		Extra:           def.ExtraEnv,
+		ExtraPath:       def.ExtraPath,
+		InheritShellEnv: def.InheritInteractiveShellEnv,
+	})
+	if err != nil {
+		return env, err.Error()
+	}
+	return env, ""
 }
 
 func lookupEnvValue(env []string, key string) string {
