@@ -57,10 +57,32 @@ if [[ ! -d "$SOURCE_APP" ]]; then
     exit 1
 fi
 
+# Processes whose command line runs from the installed bundle (Swift app,
+# keep-alive daemon, managed server child). The `[a]` keeps the regex literal in
+# this script from matching the shell/pgrep command line that carries it.
+BUNDLE_RE="${TARGET_APP}/Contents/MacOS/[a]i-critic"
+bundle_pids() {
+    pgrep -f "$BUNDLE_RE" 2>/dev/null || true
+}
+
 echo "==> Stopping running $APP_NAME (if any)"
 osascript -e "tell application \"$APP_NAME\" to quit" 2>/dev/null || true
-pkill -f "${TARGET_APP}/Contents/MacOS/" 2>/dev/null || true
-sleep 0.5
+pkill -f "$BUNDLE_RE" 2>/dev/null || true
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [[ -z "$(bundle_pids)" ]] && break
+    sleep 0.5
+done
+if [[ -n "$(bundle_pids)" ]]; then
+    # A stale keep-alive daemon/server keeps the OLD binary inode mapped (the
+    # frontend is go:embed'ed), so it must die before the bundle is replaced.
+    echo "==> Forcing remaining $APP_NAME processes to exit: $(bundle_pids | tr '\n' ' ')"
+    pkill -9 -f "$BUNDLE_RE" 2>/dev/null || true
+    sleep 0.5
+fi
+if [[ -n "$(bundle_pids)" ]]; then
+    echo "error: could not stop $APP_NAME processes: $(bundle_pids | tr '\n' ' ')" >&2
+    exit 1
+fi
 
 echo "==> Installing to $TARGET_APP"
 rm -rf "$TARGET_APP"
@@ -68,6 +90,12 @@ ditto "$SOURCE_APP" "$TARGET_APP"
 xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
 
 echo "==> Installed: $TARGET_APP"
+
+# Embedded web assets are only read at process start, so a surviving daemon (or
+# one started by another bundle path) would keep serving the previous build.
+if "$TARGET_APP/Contents/MacOS/ai-critic" keep-alive request restart >/dev/null 2>&1; then
+    echo "==> Restarted running keep-alive server on the new build"
+fi
 
 if [[ "$OPEN_AFTER_INSTALL" -eq 1 ]]; then
     echo "==> Opening $APP_NAME"
