@@ -15,7 +15,8 @@ import (
 	"time"
 
 	"github.com/xhd2015/ai-critic/server/config"
-	"github.com/xhd2015/ai-critic/server/procenv"
+	"github.com/xhd2015/ai-critic/server/tools"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
 const (
@@ -598,7 +599,7 @@ func (m *Manager) isRunningLocked(id string) bool {
 	if rt == nil || rt.pid <= 0 {
 		return false
 	}
-	if !processAlive(rt.pid) {
+	if !service.Alive(rt.pid) {
 		return false
 	}
 	return rt.status == StatusRunning
@@ -631,7 +632,7 @@ func (m *Manager) buildStatusLocked(def CronTaskDefinition, now time.Time) CronT
 		st.LastFinishedAt = rt.lastFinishedAt
 		st.LastExitCode = rt.lastExitCode
 		st.LastError = rt.lastError
-		if rt.pid > 0 && processAlive(rt.pid) && rt.status == StatusRunning {
+		if rt.pid > 0 && service.Alive(rt.pid) && rt.status == StatusRunning {
 			st.Status = StatusRunning
 			st.PID = rt.pid
 		} else if rt.lastError != "" {
@@ -844,13 +845,6 @@ func pruneRuns(def *CronTaskDefinition) bool {
 	return changed
 }
 
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	return syscall.Kill(pid, 0) == nil
-}
-
 // --- process execution ---
 
 func (m *Manager) startTask(id string) error {
@@ -920,10 +914,13 @@ func (m *Manager) startTask(id string) error {
 	startedAt := time.Now().UTC()
 	_, _ = logFile.WriteString(fmt.Sprintf("\n[%s] starting cron task %s\n", startedAt.Format(time.RFC3339), name))
 
-	env := procenv.BuildManagedEnv(extraEnv)
+	env, _ := service.BuildEnv(service.EnvOptions{
+		Base:  tools.AppendExtraPaths(os.Environ()),
+		Extra: extraEnv,
+	})
 	shellCommand := command
-	if pathVal := lookupEnv(env, "PATH"); pathVal != "" {
-		shellCommand = fmt.Sprintf("export PATH=%s; %s", shellQuote(pathVal), command)
+	if pathVal := service.EnvValue(env, "PATH"); pathVal != "" {
+		shellCommand = fmt.Sprintf("export PATH=%s; %s", service.ShellQuote(pathVal), command)
 	}
 	cmd := exec.Command("bash", "-lc", shellCommand)
 	if workingDir != "" {
@@ -953,7 +950,7 @@ func (m *Manager) startTask(id string) error {
 	// Aborted / superseded before Start completed.
 	if rt.runID != runID {
 		m.mu.Unlock()
-		_ = stopProcessGroup(pid)
+		_ = service.StopProcessWithTimeout(pid, 200*time.Millisecond, 2*time.Second)
 		_ = logFile.Close()
 		return nil
 	}
@@ -1111,7 +1108,7 @@ func (m *Manager) killTask(id string, reason string, runIDs ...uint64) {
 	m.mu.Unlock()
 
 	if doKill {
-		_ = stopProcessGroup(pid)
+		_ = service.StopProcessWithTimeout(pid, 200*time.Millisecond, 2*time.Second)
 	}
 
 	// Ensure lastError sticks even if process already exiting
@@ -1155,66 +1152,6 @@ func (m *Manager) recordStartFailure(id string, msg string) {
 			break
 		}
 	}
-}
-
-func stopProcessGroup(pid int) error {
-	if pid <= 0 {
-		return nil
-	}
-	pgid, err := syscall.Getpgid(pid)
-	target := pid
-	if err == nil {
-		target = pgid
-	}
-	// Graceful first (process group), then escalate quickly so timeout windows
-	// in tests (and production) actually free the PID within a second or two.
-	_ = syscall.Kill(-target, syscall.SIGTERM)
-	_ = syscall.Kill(pid, syscall.SIGTERM)
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	_ = syscall.Kill(-target, syscall.SIGKILL)
-	_ = syscall.Kill(pid, syscall.SIGKILL)
-	// Also SIGKILL the process group again in case children reparented slowly.
-	if target != pid {
-		_ = syscall.Kill(-target, syscall.SIGKILL)
-	}
-	deadline = time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	return fmt.Errorf("process %d did not exit", pid)
-}
-
-func lookupEnv(env []string, key string) string {
-	prefix := key + "="
-	for _, item := range env {
-		if strings.HasPrefix(item, prefix) {
-			return strings.TrimPrefix(item, prefix)
-		}
-	}
-	return ""
-}
-
-func shellQuote(s string) string {
-	safe := true
-	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '/' || c == '.' || c == '-' || c == '_') {
-			safe = false
-			break
-		}
-	}
-	if safe && s != "" {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // --- HTTP ---
