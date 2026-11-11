@@ -39,6 +39,12 @@ export interface ServiceStatus {
     lastExitError?: string;
     desiredRunning: boolean;
     enabled?: boolean;
+    /** Saved intent: keep the process alive when the host quits. */
+    detached?: boolean;
+    /** Lifetime of the process that is running now (differs from `detached` until a restart). */
+    detachedActive?: boolean;
+    /** The process was taken over from a previous host instead of being spawned. */
+    adopted?: boolean;
     portForward?: ServicePortForwardStatus;
     /** Remembered remote path that `service upgrade` moves an uploaded binary to. */
     upgradeTarget?: string;
@@ -111,6 +117,8 @@ export interface ServiceDefinition {
     extraPath?: string;
     /** Merge the interactive login shell env into the service env at start. */
     inheritInteractiveShellEnv?: boolean;
+    /** Keep the process alive when the host quits; applied on the next start. */
+    detached?: boolean;
     portForward?: ServicePortForward;
     upgradeTarget?: string;
     upgradePreStopCmds?: string[];

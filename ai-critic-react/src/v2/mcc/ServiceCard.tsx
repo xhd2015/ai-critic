@@ -101,6 +101,30 @@ export function ServiceCard({ service, onEdit, onStart, onStop, onRestart, onDis
                             <span className="mcc-service-enabled-badge--disabled">Disabled</span>
                         )}
                         <span className={`mcc-service-status-badge mcc-service-status-badge--${service.status}`}>{statusLabel}</span>
+                        {service.detached && (
+                            <span
+                                className="mcc-service-lifetime-badge"
+                                title="Keeps running after ai-critic quits"
+                            >
+                                detached
+                            </span>
+                        )}
+                        {service.status === 'running' && !!service.detachedActive !== !!service.detached && (
+                            <span
+                                className="mcc-service-pending-badge"
+                                title="Lifetime changes apply on the next start; restart the service to apply it now."
+                            >
+                                restart to apply
+                            </span>
+                        )}
+                        {service.adopted && (
+                            <span
+                                className="mcc-service-adopted-badge"
+                                title="Taken over from a previous ai-critic instance instead of being started again."
+                            >
+                                adopted
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className="mcc-service-command">{service.command}</div>

@@ -48,7 +48,8 @@
 
     /* Long-form fields keep the full width on their own row. */
     .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(textarea),
-    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(.mcc-service-inherit) {
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(.mcc-service-inherit),
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(.mcc-service-detach) {
         grid-column: 1 / -1;
     }
 }

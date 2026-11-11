@@ -38,6 +38,7 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<ServiceFormState>(createDefaultForm());
+    const [lifetimeNotice, setLifetimeNotice] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ServiceStatus | null>(null);
     const [disableTarget, setDisableTarget] = useState<ServiceStatus | null>(null);
     const [enableTarget, setEnableTarget] = useState<ServiceStatus | null>(null);
@@ -71,6 +72,12 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
     }, []);
 
     useEffect(() => {
+        if (!lifetimeNotice) return;
+        const timer = setTimeout(() => setLifetimeNotice(null), 12000);
+        return () => clearTimeout(timer);
+    }, [lifetimeNotice]);
+
+    useEffect(() => {
         fetchHomeDir()
             .then((dir) => setHomeDir(dir))
             .catch(() => {});
@@ -87,6 +94,9 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
         setShowForm(false);
         setActionError(null);
     };
+
+    /** The service behind the open form, kept live by the poll. */
+    const editingService = form.id ? services.find((service) => service.id === form.id) : undefined;
 
     const openNewForm = () => {
         setForm(createDefaultForm(homeDir));
@@ -182,6 +192,10 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
             }
         }
 
+        // Detached only takes effect on the next start, so remember how the
+        // running process was started before the save changes the definition.
+        const previous = editingService;
+
         setSaving(true);
         setActionError(null);
         try {
@@ -199,6 +213,7 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 extraEnv: parsedEnv.env,
                 extraPath: extraPath || undefined,
                 inheritInteractiveShellEnv: form.inheritShellEnv,
+                detached: form.detached,
                 portForward,
                 // Carried through so saving the form cannot silently drop the
                 // configured upgrade steps.
@@ -211,6 +226,11 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 authToken: form.authTokenMode === 'custom' ? form.authToken : undefined,
             });
             await refreshServices();
+            if (previous && previous.status === 'running' && !!previous.detachedActive !== form.detached) {
+                setLifetimeNotice(
+                    `${name} is still running with its previous lifetime. Restart it to apply the new setting.`,
+                );
+            }
             resetForm();
         } catch (err) {
             setActionError(err instanceof Error ? err.message : String(err));
@@ -245,6 +265,20 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 <div className="mcc-service-subtitle">
                     Define commands the server should keep alive, optionally with managed port forwarding.
                 </div>
+
+                {lifetimeNotice && (
+                    <div className="mcc-service-notice" role="status">
+                        <span>{lifetimeNotice}</span>
+                        <button
+                            type="button"
+                            className="mcc-service-notice-close"
+                            aria-label="Dismiss"
+                            onClick={() => setLifetimeNotice(null)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
 
                 <div className="mcc-service-list">
                     {userServices.map((service) => (
@@ -360,6 +394,7 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                     providers={providerButtons}
                     presets={presets}
                     onApplyPreset={applyPreset}
+                    service={editingService}
                 />
             )}
         </section>

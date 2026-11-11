@@ -14,6 +14,8 @@ export interface ServiceFormState {
     extraPath: string;
     /** Merge the interactive login shell env (dot-pkgs ResolveLoginEnvs). */
     inheritShellEnv: boolean;
+    /** Keep the process alive when the host quits; applied on the next start. */
+    detached: boolean;
     /** One upgrade step per line; blank lines are ignored. */
     upgradePreStopText: string;
     upgradePostStopText: string;
@@ -40,6 +42,7 @@ export function createDefaultForm(workingDir = ''): ServiceFormState {
         extraEnvText: '',
         extraPath: '',
         inheritShellEnv: false,
+        detached: false,
         upgradePreStopText: '',
         upgradePostStopText: '',
         upgradeTimeout: '',
@@ -67,6 +70,7 @@ export function toFormState(service: ServiceStatus): ServiceFormState {
         extraEnvText: stringifyEnvMap(service.extraEnv),
         extraPath: service.extraPath || '',
         inheritShellEnv: !!service.inheritInteractiveShellEnv,
+        detached: !!service.detached,
         upgradePreStopText: (service.upgradePreStopCmds || []).join('\n'),
         upgradePostStopText: (service.upgradePostStopCmds || []).join('\n'),
         upgradeTimeout: service.upgradeTimeoutSeconds === undefined ? '' : String(service.upgradeTimeoutSeconds),

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import type { ServicePreset } from '../../api/services';
+import type { ServicePreset, ServiceStatus } from '../../api/services';
 import type { ProviderInfo } from '../../hooks/usePortForwards';
 import { ServiceFormFields } from './ServiceFormFields';
 import type { ServiceFormState } from './serviceFormState';
@@ -19,6 +19,8 @@ export interface ServiceFormModalProps {
     providers: ProviderInfo[];
     presets: ServicePreset[];
     onApplyPreset: (preset: ServicePreset) => void;
+    /** The service being edited, used to flag start-time settings that need a restart. */
+    service?: ServiceStatus;
 }
 
 /**
@@ -37,6 +39,7 @@ export function ServiceFormModal({
     providers,
     presets,
     onApplyPreset,
+    service,
 }: ServiceFormModalProps) {
     const dialogRef = useRef<HTMLFormElement | null>(null);
     // Escape and the scroll lock are installed once; refs keep the handlers
@@ -142,6 +145,7 @@ export function ServiceFormModal({
                         providers={providers}
                         presets={presets}
                         onApplyPreset={onApplyPreset}
+                        service={service}
                     />
                     {error && <div className="mcc-modal-error">{error}</div>}
                 </div>

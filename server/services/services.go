@@ -89,6 +89,10 @@ type ServiceDefinition struct {
 	// Enabled controls boot auto-start and daemon reconcile. Defaults to true
 	// when absent. Disable/enable do not immediately stop or start processes.
 	Enabled *bool `json:"enabled,omitempty"`
+	// Detached keeps the process running after this host exits (app quit,
+	// keep-alive restart, crash). Like Enabled it is a start-time setting: the
+	// edit applies on the next start and never restarts a running service.
+	Detached bool `json:"detached,omitempty"`
 	// RequireAuth gates the public URL with an in-process cookie login hop.
 	RequireAuth   bool   `json:"requireAuth,omitempty"`
 	AuthUser      string `json:"authUser,omitempty"`
@@ -121,19 +125,27 @@ type ServiceStatus struct {
 	ExtraPath   string            `json:"extraPath,omitempty"`
 	// InheritInteractiveShellEnv mirrors the definition so the GUI can show the
 	// toggle's state; ShellEnvError reports the last start-time probe failure.
-	InheritInteractiveShellEnv bool                      `json:"inheritInteractiveShellEnv,omitempty"`
-	ShellEnvError              string                    `json:"shellEnvError,omitempty"`
-	EffectivePath              string                    `json:"effectivePath,omitempty"`
-	LogPath                    string                    `json:"logPath"`
-	Status                     string                    `json:"status"`
-	PID                        int                       `json:"pid"`
-	LastStartedAt              string                    `json:"lastStartedAt,omitempty"`
-	LastExitedAt               string                    `json:"lastExitedAt,omitempty"`
-	LastExitError              string                    `json:"lastExitError,omitempty"`
-	DesiredRunning             bool                      `json:"desiredRunning"`
-	Enabled                    bool                      `json:"enabled"`
-	PortForward                *ServicePortForwardStatus `json:"portForward,omitempty"`
-	UpgradeTarget              string                    `json:"upgradeTarget,omitempty"`
+	InheritInteractiveShellEnv bool   `json:"inheritInteractiveShellEnv,omitempty"`
+	ShellEnvError              string `json:"shellEnvError,omitempty"`
+	EffectivePath              string `json:"effectivePath,omitempty"`
+	LogPath                    string `json:"logPath"`
+	Status                     string `json:"status"`
+	PID                        int    `json:"pid"`
+	LastStartedAt              string `json:"lastStartedAt,omitempty"`
+	LastExitedAt               string `json:"lastExitedAt,omitempty"`
+	LastExitError              string `json:"lastExitError,omitempty"`
+	DesiredRunning             bool   `json:"desiredRunning"`
+	Enabled                    bool   `json:"enabled"`
+	// Detached is the saved lifetime setting; DetachedActive is how the running
+	// process was actually started. They differ while a change waits for a
+	// restart, which is what the GUI's "restart to apply" hint reports.
+	Detached       bool `json:"detached"`
+	DetachedActive bool `json:"detachedActive"`
+	// Adopted marks a process taken over from a previous host instance (a
+	// detached service that outlived it) rather than started here.
+	Adopted       bool                      `json:"adopted,omitempty"`
+	PortForward   *ServicePortForwardStatus `json:"portForward,omitempty"`
+	UpgradeTarget string                    `json:"upgradeTarget,omitempty"`
 	// UpgradePreStopCmds and UpgradePostStopCmds mirror the definition so a
 	// service update round-trip preserves them.
 	UpgradePreStopCmds    []string `json:"upgradePreStopCmds,omitempty"`
@@ -367,7 +379,10 @@ func newManagerAt(configPath, dataDir string) *Manager {
 		dataDir:            dataDir,
 	}
 	m.sup = service.NewSupervisor(service.Options{
-		DataDir: dataDir,
+		// Always a concrete dir: the supervisor only tracks runtime records
+		// (needed to adopt detached survivors) when this is non-empty, and an
+		// empty dataDir here means "use the package default", not "disabled".
+		DataDir: m.servicesDataDir(),
 		LogDir:  m.servicesLogDir(),
 		Prepare: m.prepareStart,
 		Started: m.started,
@@ -553,11 +568,14 @@ func (m *Manager) AutoStartConfiguredServices() {
 	}
 }
 
-// Shutdown stops every managed service. Stops run concurrently: each waits up
-// to 5s for its process to die, so stopping a fleet sequentially can outlast the
-// caller's cleanup budget and leave the last services running when the process
-// is replaced.
+// Shutdown stops every managed service, giving detached ones a pass: the user
+// asked those processes to outlive this host, so they keep running and the next
+// instance adopts them. Their port forwards and tunnels are host-owned and are
+// re-established after adoption. Only the lifetime the process actually runs
+// with counts, so a service whose Detached flag was saved mid-run still stops
+// here until it is restarted.
 func (m *Manager) Shutdown() {
+	detached := m.detachedIDs()
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.defs))
 	for _, def := range m.defs {
@@ -567,6 +585,10 @@ func (m *Manager) Shutdown() {
 
 	var wg sync.WaitGroup
 	for _, id := range ids {
+		if detached[id] {
+			fmt.Printf("[services] leaving detached service %q running\n", id)
+			continue
+		}
 		wg.Add(1)
 		go func(id string) {
 			defer wg.Done()
@@ -577,6 +599,20 @@ func (m *Manager) Shutdown() {
 	// Adopted orphans have no saved definition, so sweep whatever the supervisor
 	// still tracks and stop the health check.
 	m.sup.Shutdown()
+}
+
+// detachedIDs reports which services run with a detached lifetime right now.
+func (m *Manager) detachedIDs() map[string]bool {
+	out := make(map[string]bool)
+	if m.sup == nil {
+		return out
+	}
+	for _, proc := range m.sup.Processes() {
+		if proc.Detached && proc.PID > 0 && service.Alive(proc.PID) {
+			out[proc.Definition.ID] = true
+		}
+	}
+	return out
 }
 
 // ForceStopAll kills any managed service process that is still alive, returning
@@ -593,6 +629,11 @@ func (m *Manager) forceStopAll() []string {
 	names := make([]string, 0, len(procs))
 	for _, proc := range procs {
 		if proc.PID <= 0 || !service.Alive(proc.PID) {
+			continue
+		}
+		if proc.Detached {
+			// Surviving this host is the whole point of the flag, so a survivor
+			// here is expected, not a leaked child.
 			continue
 		}
 		name := proc.Definition.Name
@@ -934,6 +975,8 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 		effectivePath := ""
 		desired := true
 		ownedForward := false
+		detachedActive := false
+		adopted := false
 		if tracked {
 			status = string(proc.State)
 			pid = proc.PID
@@ -943,6 +986,7 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 			shellEnvError = proc.ShellEnvError
 			effectivePath = proc.EffectivePath
 			desired = proc.Desired
+			adopted = proc.Adopted
 			if proc.LogPath != "" {
 				logPath = proc.LogPath
 			}
@@ -952,6 +996,9 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 					status = StatusStopped
 				}
 			}
+			// Only a live process has a lifetime in effect; a stopped one has
+			// nothing to "apply" yet, so the GUI's pending hint must stay off.
+			detachedActive = pid > 0 && proc.Detached
 		}
 		if hop != nil {
 			ownedForward = hop.ownedForward
@@ -989,6 +1036,9 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 			}
 		}
 
+		// "Adopted" describes a live takeover: once the taken-over process is
+		// gone (stopped, or exited on its own) the badge must not linger.
+		adopted = adopted && pid > 0
 		result = append(result, ServiceStatus{
 			ID:                         def.ID,
 			Name:                       def.Name,
@@ -1008,6 +1058,9 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 			LastExitError:              lastExitError,
 			DesiredRunning:             desired,
 			Enabled:                    serviceEnabled(def),
+			Detached:                   def.Detached,
+			DetachedActive:             detachedActive,
+			Adopted:                    adopted,
 			PortForward:                pfStatus,
 			UpgradeTarget:              def.UpgradeTarget,
 			UpgradePreStopCmds:         cloneCmdList(def.UpgradePreStopCmds),
@@ -1177,6 +1230,7 @@ func toServiceDefinition(def ServiceDefinition) service.Definition {
 		ExtraPath:                  def.ExtraPath,
 		InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
 		Enabled:                    def.Enabled,
+		Detached:                   def.Detached,
 	}
 }
 
@@ -1192,6 +1246,7 @@ func fromServiceDefinition(def service.Definition) ServiceDefinition {
 		ExtraPath:                  def.ExtraPath,
 		InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
 		Enabled:                    def.Enabled,
+		Detached:                   def.Detached,
 	}
 }
 
@@ -1565,6 +1620,10 @@ func inspectAuthTokens(def ServiceDefinition) []string {
 	return tokens
 }
 
+// definitionChanged reports whether an edit needs a restart to take effect.
+// Start-time flags are deliberately absent: Enabled and Detached only affect
+// what happens on the next start (or on quit), so saving them must never bounce
+// a running process behind the user's back.
 func definitionChanged(oldDef ServiceDefinition, newDef ServiceDefinition) bool {
 	if oldDef.Name != newDef.Name || oldDef.Command != newDef.Command || oldDef.WorkingDir != newDef.WorkingDir {
 		return true

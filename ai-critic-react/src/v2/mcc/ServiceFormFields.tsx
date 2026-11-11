@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchOwnedDomains } from '../../api/cloudflare';
-import type { ServicePreset } from '../../api/services';
+import type { ServicePreset, ServiceStatus } from '../../api/services';
 import type { ProviderInfo } from '../../hooks/usePortForwards';
 import { TunnelProviders } from '../../hooks/usePortForwards';
 import { ServiceAuthFields } from './ServiceAuthFields';
@@ -14,13 +14,21 @@ export interface ServiceFormFieldsProps {
     /** Presets prefill the form; nothing is created until the user saves. */
     presets: ServicePreset[];
     onApplyPreset: (preset: ServicePreset) => void;
+    /** The service being edited, so start-time settings can flag a pending restart. */
+    service?: ServiceStatus;
 }
 
 /**
  * ServiceFormFields is the body of the add/edit service dialog: every field,
  * with no chrome and no submit button. The modal owns those.
  */
-export function ServiceFormFields({ form, onChange, homeDir, providers, presets, onApplyPreset }: ServiceFormFieldsProps) {
+export function ServiceFormFields({ form, onChange, homeDir, providers, presets, onApplyPreset, service }: ServiceFormFieldsProps) {
+    // Lifetime is frozen when a process starts, so the checkbox can disagree
+    // with the process that is running right now. Say so instead of letting the
+    // save look like it already took effect.
+    const runningDetached = service && service.status === 'running' ? !!service.detachedActive : undefined;
+    const lifetimePending = runningDetached !== undefined && runningDetached !== form.detached;
+
     return (
         <>
             {!form.id && presets.length > 0 && (
@@ -113,6 +121,32 @@ export function ServiceFormFields({ form, onChange, homeDir, providers, presets,
                         <code>~/.zshrc</code> / <code>~/.bashrc</code> apply. Shell values win over the process env;
                         a failure is reported on the service instead of blocking the start.
                     </div>
+                </div>
+                <div className="mcc-form-field">
+                    <label htmlFor="mcc-service-detached">Lifetime</label>
+                    <label className="mcc-service-detach" htmlFor="mcc-service-detached">
+                        <input
+                            id="mcc-service-detached"
+                            type="checkbox"
+                            checked={form.detached}
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                onChange((prev) => ({ ...prev, detached: checked }));
+                            }}
+                        />
+                        <span>Detached — keep running after ai-critic quits</span>
+                    </label>
+                    <div className="mcc-service-field-hint">
+                        Applies on the next start. A running service keeps its current lifetime until you restart it;
+                        Detached services are adopted on the next boot.
+                    </div>
+                    {lifetimePending && (
+                        <div className="mcc-service-lifetime-notice" role="status">
+                            {form.detached
+                                ? 'This service is running attached. Restart it to keep it running after ai-critic quits.'
+                                : 'This service is running detached, so it still survives quitting ai-critic. Restart it to apply the new lifetime.'}
+                        </div>
+                    )}
                 </div>
                 <div className="mcc-form-field">
                     <label>Upgrade Pre-Stop Steps</label>

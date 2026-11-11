@@ -2,6 +2,7 @@ package agentcli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/xhd2015/ai-critic/client"
@@ -60,6 +61,8 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		extraPath            string
 		inheritShellEnv      bool
 		noInheritShellEnv    bool
+		detached             bool
+		noDetached           bool
 		port                 int
 		portLabel            string
 		portProvider         string
@@ -88,6 +91,8 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		String("--extra-path", &extraPath).
 		Bool("--inherit-shell-env", &inheritShellEnv).
 		Bool("--no-inherit-shell-env", &noInheritShellEnv).
+		Bool("--detached", &detached).
+		Bool("--no-detached", &noDetached).
 		Int("--port", &port).
 		String("--port-label", &portLabel).
 		String("--port-provider", &portProvider).
@@ -218,6 +223,18 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		updateCount++
 	}
 
+	if detached && noDetached {
+		return fmt.Errorf("--detached cannot be combined with --no-detached")
+	}
+	if detached {
+		def.Detached = true
+		updateCount++
+	}
+	if noDetached {
+		def.Detached = false
+		updateCount++
+	}
+
 	portFieldsSpecified := specified["--port"] ||
 		specified["--port-label"] ||
 		specified["--port-provider"] ||
@@ -298,12 +315,21 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		return fmt.Errorf("service update requires at least one update flag")
 	}
 
+	// Lifetime is a start-time setting: saving it never bounces a running
+	// process, so tell the user which command applies it. The exit code stays 0
+	// because the save itself succeeded.
+	lifetimePending := service.Status == "running" && service.DetachedActive != def.Detached
+
 	updated, err := cli.SaveService(def, false)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Updated service %s (%s)\n", updated.ID, displayOrDash(updated.Name))
 	fmt.Println("Saved definition. Restart the service for changed runtime values to take effect.")
+	if lifetimePending {
+		fmt.Fprintf(os.Stderr, "warning: %s is still running with its current lifetime; run `remote-agent service restart %s` to apply detached=%t\n",
+			updated.ID, updated.ID, def.Detached)
+	}
 	return nil
 }
 
@@ -319,6 +345,7 @@ func serviceDefinitionFromStatus(service *client.ServiceStatus) client.ServiceDe
 		ExtraEnv:                   cloneServiceEnv(service.ExtraEnv),
 		ExtraPath:                  service.ExtraPath,
 		InheritInteractiveShellEnv: service.InheritInteractiveShellEnv,
+		Detached:                   service.Detached,
 		PortForward:                servicePortForwardFromStatus(service.PortForward),
 		UpgradeTarget:              service.UpgradeTarget,
 		UpgradePreStopCmds:         append([]string(nil), service.UpgradePreStopCmds...),
@@ -401,6 +428,8 @@ func serviceUpdateSpecifiedFlags(args []string) map[string]bool {
 		"--clear-env":                    true,
 		"--inherit-shell-env":            true,
 		"--no-inherit-shell-env":         true,
+		"--detached":                     true,
+		"--no-detached":                  true,
 		"--clear-port-forward":           true,
 		"--require-auth":                 true,
 		"--clear-auth":                   true,

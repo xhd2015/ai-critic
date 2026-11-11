@@ -45,6 +45,7 @@ type ServiceDefinition struct {
 	UpgradePostStopCmds        []string            `json:"upgradePostStopCmds,omitempty"`
 	UpgradeTimeoutSeconds      *int                `json:"upgradeTimeoutSeconds,omitempty"`
 	Enabled                    *bool               `json:"enabled,omitempty"`
+	Detached                   bool                `json:"detached,omitempty"`
 	RequireAuth                bool                `json:"requireAuth,omitempty"`
 	AuthUser                   string              `json:"authUser,omitempty"`
 	AuthTokenMode              string              `json:"authTokenMode,omitempty"`
@@ -71,6 +72,9 @@ type ServiceStatus struct {
 	LastExitError              string                    `json:"lastExitError,omitempty"`
 	DesiredRunning             bool                      `json:"desiredRunning"`
 	Enabled                    bool                      `json:"enabled"`
+	Detached                   bool                      `json:"detached"`
+	DetachedActive             bool                      `json:"detachedActive"`
+	Adopted                    bool                      `json:"adopted,omitempty"`
 	PortForward                *ServicePortForwardStatus `json:"portForward,omitempty"`
 	UpgradeTarget              string                    `json:"upgradeTarget,omitempty"`
 	// Upgrade step configuration, mirrored so `service update` round-trips it.
