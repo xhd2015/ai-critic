@@ -74,15 +74,26 @@ func TestStopProcessGroupKillsNonLeaderListenerPID(t *testing.T) {
 }
 
 func firstChildPID(parentPID int) (int, error) {
-	out, err := exec.Command("pgrep", "-P", strconv.Itoa(parentPID)).Output()
-	if err != nil {
-		return 0, err
+	// A freshly exec'd bash has not forked its children yet, so poll instead of
+	// treating the first empty result as a failure.
+	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		out, err := exec.Command("pgrep", "-P", strconv.Itoa(parentPID)).Output()
+		if err == nil {
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			if len(lines) > 0 && lines[0] != "" {
+				return strconv.Atoi(lines[0])
+			}
+		} else {
+			lastErr = err
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || lines[0] == "" {
-		return 0, exec.ErrNotFound
+	if lastErr != nil {
+		return 0, lastErr
 	}
-	return strconv.Atoi(lines[0])
+	return 0, exec.ErrNotFound
 }
 
 func TestParseProcStatState(t *testing.T) {
@@ -164,7 +175,7 @@ func TestCreateOrUpdateRestartOfMissingPIDStillSaves(t *testing.T) {
 	enabled := true
 	def := ServiceDefinition{
 		Name:       "restart-flake",
-		Command:    "sleep 300",
+		Command:    "sleep 0.3",
 		WorkingDir: dir,
 		Enabled:    &enabled,
 	}
@@ -173,17 +184,21 @@ func TestCreateOrUpdateRestartOfMissingPIDStillSaves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	// Stale PID that is not alive (same class of failure as a zombie for stop).
-	m.mu.Lock()
-	procDef := m.definitions[0]
-	m.processes[saved.ID] = &serviceProcess{
-		def:     procDef,
-		pid:     1<<30 - 1,
-		desired: true,
-		status:  StatusRunning,
+	if _, err := m.Start(saved.ID); err != nil {
+		t.Fatalf("start: %v", err)
 	}
-	m.mu.Unlock()
+	// Let the child exit on its own so the supervisor's tracked pid is gone by
+	// the time the restart runs; this is the same class of failure as a zombie
+	// for stop, where the pid it remembers is no longer stoppable.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if proc, ok := m.sup.Process(saved.ID); !ok || proc.PID == 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 
+	procDef := m.defs[0]
 	procDef.Command = "sleep 301"
 	out, err := m.createOrUpdate(procDef, true)
 	if err != nil {

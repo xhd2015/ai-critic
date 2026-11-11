@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
 func boolPtr(v bool) *bool { return &v }
@@ -28,12 +31,44 @@ func startTestService(t *testing.T, m *Manager, name string, command string) str
 
 func servicePID(t *testing.T, m *Manager, id string) int {
 	t.Helper()
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if proc := m.processes[id]; proc != nil {
-		return proc.pid
+	proc, ok := m.sup.Process(id)
+	if !ok {
+		return 0
 	}
-	return 0
+	return proc.PID
+}
+
+// runtimeStateFile is where the supervisor keeps the pids this instance owns.
+func runtimeStateFile(dir string) string {
+	return filepath.Join(dir, "services-runtime.json")
+}
+
+// writeRuntimeState plants a runtime record on disk, as a crashed instance
+// would have left it.
+func writeRuntimeState(t *testing.T, dir string, state service.RuntimeState) {
+	t.Helper()
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal runtime state: %v", err)
+	}
+	if err := os.WriteFile(runtimeStateFile(dir), data, 0600); err != nil {
+		t.Fatalf("write runtime state: %v", err)
+	}
+}
+
+// readRuntimeState reads the runtime record file directly, so the assertion
+// does not depend on the supervisor's in-memory view.
+func readRuntimeState(t *testing.T, dir string) service.RuntimeState {
+	t.Helper()
+	data, err := os.ReadFile(runtimeStateFile(dir))
+	if err != nil {
+		t.Fatalf("read runtime state: %v", err)
+	}
+	var state service.RuntimeState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("unmarshal runtime state: %v", err)
+	}
+	return state
 }
 
 // freePort asks the kernel for an unused port, then releases it.
@@ -139,11 +174,9 @@ func TestReconcileOrphansKillsPreviousInstanceProcess(t *testing.T) {
 		t.Fatalf("orphan never served port %d", port)
 	}
 
-	// Simulate the crash: drop in-memory state without stopping anything.
-	prev.mu.Lock()
-	prev.processes = map[string]*serviceProcess{}
-	prev.mu.Unlock()
-
+	// Simulate the crash: the next instance is built from the same data dir
+	// without the previous instance ever stopping its children. prev's own
+	// supervisor still tracks the pid, which is exactly the orphan state.
 	next := NewManagerAt(dir)
 	reclaimed := next.ReconcileOrphans()
 	if len(reclaimed) != 1 {
@@ -174,9 +207,9 @@ func TestReconcileOrphansIgnoresRecycledPID(t *testing.T) {
 
 	// Record a live, unrelated process (this test binary's own pid) under a
 	// command that does not match what it is actually running.
-	m.saveRuntimeState(serviceRuntimeState{
-		Version: runtimeStateVersion,
-		Processes: map[string]serviceRuntimeRecord{
+	writeRuntimeState(t, dir, service.RuntimeState{
+		Version: service.RuntimeStateVersion,
+		Processes: map[string]service.RuntimeRecord{
 			"svc-recycled": {
 				PID:     os.Getpid(),
 				Command: "/nonexistent/binary --definitely-not-running",
@@ -199,10 +232,7 @@ func TestRuntimeRecordClearedOnStop(t *testing.T) {
 	m := NewManagerAt(dir)
 	id := startTestService(t, m, "recorded", "sleep 300")
 
-	state, err := m.loadRuntimeState()
-	if err != nil {
-		t.Fatal(err)
-	}
+	state := readRuntimeState(t, dir)
 	if _, ok := state.Processes[id]; !ok {
 		t.Fatal("starting a service did not persist a runtime record")
 	}
@@ -210,10 +240,7 @@ func TestRuntimeRecordClearedOnStop(t *testing.T) {
 	if err := m.Stop(id); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
-	state, err = m.loadRuntimeState()
-	if err != nil {
-		t.Fatal(err)
-	}
+	state = readRuntimeState(t, dir)
 	if _, ok := state.Processes[id]; ok {
 		t.Fatal("a stopped service still has a runtime record; a later boot would try to reclaim it")
 	}
@@ -223,9 +250,10 @@ func TestRuntimeRecordClearedOnStop(t *testing.T) {
 func TestRuntimeStateFileIsBesideServicesJSON(t *testing.T) {
 	dir := t.TempDir()
 	m := NewManagerAt(dir)
-	want := filepath.Join(dir, "services-runtime.json")
-	if got := m.runtimeStateFile(); got != want {
-		t.Fatalf("runtimeStateFile() = %q, want %q", got, want)
+	startTestService(t, m, "recorded", "sleep 300")
+	defer m.Shutdown()
+	if _, err := os.Stat(runtimeStateFile(dir)); err != nil {
+		t.Fatalf("runtime state file missing beside services.json: %v", err)
 	}
 	if !strings.HasSuffix(m.servicesFile(), "services.json") {
 		t.Fatalf("unexpected services file %q", m.servicesFile())

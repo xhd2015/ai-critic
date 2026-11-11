@@ -8,7 +8,14 @@ import (
 	"testing"
 
 	"github.com/xhd2015/ai-critic/server/proxy/portforward"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
+
+// newHopsManager returns a Manager with just its in-memory hop map initialized,
+// for tests that exercise port-forward bookkeeping without a supervisor.
+func newHopsManager() *Manager {
+	return &Manager{hops: make(map[string]*forwardHop)}
+}
 
 func TestEnsurePortForwardReplacesMismatchedForwardForSamePort(t *testing.T) {
 	pfm := portforward.NewManager()
@@ -19,12 +26,8 @@ func TestEnsurePortForwardReplacesMismatchedForwardForSamePort(t *testing.T) {
 		t.Fatalf("Add stale forward error = %v", err)
 	}
 
-	m := &Manager{
-		processes: map[string]*serviceProcess{
-			"svc-v3": {},
-		},
-		portForwardManager: pfm,
-	}
+	m := newHopsManager()
+	m.portForwardManager = pfm
 
 	err := m.ensurePortForward("svc-v3", ServiceDefinition{
 		PortForward: &ServicePortForward{
@@ -49,7 +52,7 @@ func TestEnsurePortForwardReplacesMismatchedForwardForSamePort(t *testing.T) {
 	if provider.StopCount() != 1 {
 		t.Fatalf("stale stop count = %d, want 1", provider.StopCount())
 	}
-	if !m.processes["svc-v3"].ownedForward {
+	if !m.hops["svc-v3"].ownedForward {
 		t.Fatalf("service did not take ownership of replacement forward")
 	}
 }
@@ -63,12 +66,9 @@ func TestEnsurePortForwardKeepsExistingServiceOwnership(t *testing.T) {
 		t.Fatalf("Add existing forward error = %v", err)
 	}
 
-	m := &Manager{
-		processes: map[string]*serviceProcess{
-			"svc-v3": {ownedForward: true},
-		},
-		portForwardManager: pfm,
-	}
+	m := newHopsManager()
+	m.hops["svc-v3"] = &forwardHop{ownedForward: true}
+	m.portForwardManager = pfm
 
 	err := m.ensurePortForward("svc-v3", ServiceDefinition{
 		PortForward: &ServicePortForward{
@@ -81,7 +81,7 @@ func TestEnsurePortForwardKeepsExistingServiceOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensurePortForward() error = %v", err)
 	}
-	if !m.processes["svc-v3"].ownedForward {
+	if !m.hops["svc-v3"].ownedForward {
 		t.Fatalf("service ownership was cleared for an existing matching forward")
 	}
 	if provider.StopCount() != 0 {
@@ -95,10 +95,10 @@ func TestServiceUpgradeTargetFallbackAndRemoteMemory(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	m := &Manager{
-		definitions: []ServiceDefinition{
+		defs: []ServiceDefinition{
 			{ID: "svc-1", Name: "web", Command: "sleep 10"},
 		},
-		processes: map[string]*serviceProcess{},
+		hops: make(map[string]*forwardHop),
 	}
 
 	selected, err := m.selectServiceUpgradeTarget("svc-1", "server-linux-amd64", "")
@@ -122,8 +122,8 @@ func TestServiceUpgradeTargetFallbackAndRemoteMemory(t *testing.T) {
 	if selected.Remembered != "~/bin/server" {
 		t.Fatalf("specified remembered target = %q, want ~/bin/server", selected.Remembered)
 	}
-	if m.definitions[0].UpgradeTarget != "~/bin/server" {
-		t.Fatalf("service upgrade target = %q, want ~/bin/server", m.definitions[0].UpgradeTarget)
+	if m.defs[0].UpgradeTarget != "~/bin/server" {
+		t.Fatalf("service upgrade target = %q, want ~/bin/server", m.defs[0].UpgradeTarget)
 	}
 
 	selected, err = m.selectServiceUpgradeTarget("svc-1", "server-linux-amd64", "")
@@ -142,44 +142,63 @@ func TestCreateOrUpdatePreservesServiceUpgradeTarget(t *testing.T) {
 	useTempServicesConfig(t)
 
 	m := &Manager{
-		definitions: []ServiceDefinition{
+		defs: []ServiceDefinition{
 			{ID: "svc-1", Name: "web", Command: "sleep 10", UpgradeTarget: "~/bin/server"},
 		},
-		processes: map[string]*serviceProcess{},
+		hops: make(map[string]*forwardHop),
 	}
 
 	if _, err := m.CreateOrUpdate(ServiceDefinition{ID: "svc-1", Name: "web", Command: "sleep 20"}); err != nil {
 		t.Fatalf("CreateOrUpdate() error = %v", err)
 	}
-	if m.definitions[0].UpgradeTarget != "~/bin/server" {
-		t.Fatalf("upgrade target after update = %q, want ~/bin/server", m.definitions[0].UpgradeTarget)
+	if m.defs[0].UpgradeTarget != "~/bin/server" {
+		t.Fatalf("upgrade target after update = %q, want ~/bin/server", m.defs[0].UpgradeTarget)
 	}
 }
 
-func TestCreateOrUpdateNoRestartDoesNotMutateRunningProcessDefinition(t *testing.T) {
-	useTempServicesConfig(t)
+func TestCreateOrUpdateNoRestartKeepsRunningProcess(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerAt(dir)
+	t.Cleanup(m.Shutdown)
+	enabled := true
 
-	oldDef := ServiceDefinition{ID: "svc-1", Name: "web", Command: "sleep 10", WorkingDir: "/old"}
-	m := &Manager{
-		definitions: []ServiceDefinition{oldDef},
-		processes: map[string]*serviceProcess{
-			"svc-1": {def: oldDef, desired: true},
-		},
+	saved, err := m.CreateOrUpdate(ServiceDefinition{
+		ID:         "svc-1",
+		Name:       "web",
+		Command:    "sleep 300",
+		WorkingDir: dir,
+		Enabled:    &enabled,
+	})
+	if err != nil {
+		t.Fatalf("CreateOrUpdate() error = %v", err)
+	}
+	if _, err := m.Start(saved.ID); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	before, ok := m.sup.Process(saved.ID)
+	if !ok || before.PID == 0 {
+		t.Fatalf("process not tracked after start: %#v", before)
+	}
+	if before.State != service.StateRunning {
+		t.Fatalf("state after start = %q, want running", before.State)
 	}
 
 	if _, err := m.CreateOrUpdateNoRestart(ServiceDefinition{
-		ID:         "svc-1",
+		ID:         saved.ID,
 		Name:       "web",
-		Command:    "sleep 20",
-		WorkingDir: "/new",
+		Command:    "sleep 600",
+		WorkingDir: dir,
 	}); err != nil {
 		t.Fatalf("CreateOrUpdateNoRestart() error = %v", err)
 	}
-	if m.definitions[0].Command != "sleep 20" || m.definitions[0].WorkingDir != "/new" {
-		t.Fatalf("saved definition = command %q dir %q, want updated", m.definitions[0].Command, m.definitions[0].WorkingDir)
+	if m.defs[0].Command != "sleep 600" {
+		t.Fatalf("saved command = %q, want the updated one", m.defs[0].Command)
 	}
-	if proc := m.processes["svc-1"]; proc.def.Command != "sleep 10" || proc.def.WorkingDir != "/old" {
-		t.Fatalf("running process definition changed to command %q dir %q", proc.def.Command, proc.def.WorkingDir)
+
+	// No restart: the child that is already running must be left untouched.
+	after, ok := m.sup.Process(saved.ID)
+	if !ok || after.PID != before.PID || after.State != service.StateRunning {
+		t.Fatalf("process after update = %#v, want same pid %d still running", after, before.PID)
 	}
 }
 

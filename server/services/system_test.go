@@ -147,7 +147,7 @@ func TestStartDispatchesToSystemController(t *testing.T) {
 		t.Fatalf("Start() status = %#v", status)
 	}
 	// No process may be spawned for a system service.
-	if proc := m.processes["sys-fake"]; proc != nil {
+	if proc, ok := m.sup.Process("sys-fake"); ok {
 		t.Fatalf("system service spawned a process: %#v", proc)
 	}
 }
@@ -212,7 +212,7 @@ func TestCreateOrUpdateRejectsSystemServiceID(t *testing.T) {
 	if !errors.Is(err, ErrSystemServiceImmutable) {
 		t.Fatalf("createOrUpdate error = %v, want ErrSystemServiceImmutable", err)
 	}
-	if got := len(m.definitions); got != 1 {
+	if got := len(m.defs); got != 1 {
 		t.Fatalf("definitions = %d, want the user service only", got)
 	}
 }

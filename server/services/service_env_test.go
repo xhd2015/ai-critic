@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/ai-critic/server/procenv"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
 func TestValidateDefinitionRejectsInvalidExtraPath(t *testing.T) {
@@ -38,8 +39,8 @@ func TestValidateDefinitionRejectsInvalidExtraPath(t *testing.T) {
 func TestCreateOrUpdateNormalizesExtraPath(t *testing.T) {
 	useTempServicesConfig(t)
 	m := &Manager{
-		definitions: []ServiceDefinition{},
-		processes:   map[string]*serviceProcess{},
+		defs: []ServiceDefinition{},
+		hops: make(map[string]*forwardHop),
 	}
 
 	home, err := os.UserHomeDir()
@@ -71,8 +72,8 @@ func TestCreateOrUpdateNormalizesExtraPath(t *testing.T) {
 	if !saved.InheritInteractiveShellEnv {
 		t.Fatal("status InheritInteractiveShellEnv = false, want true")
 	}
-	if m.definitions[0].ExtraPath != want || !m.definitions[0].InheritInteractiveShellEnv {
-		t.Fatalf("saved definition = %#v", m.definitions[0])
+	if m.defs[0].ExtraPath != want || !m.defs[0].InheritInteractiveShellEnv {
+		t.Fatalf("saved definition = %#v", m.defs[0])
 	}
 }
 
@@ -109,21 +110,23 @@ func TestStatusReportsEnvLayers(t *testing.T) {
 		InheritInteractiveShellEnv: true,
 	}
 	m := &Manager{
-		definitions: []ServiceDefinition{def},
-		processes: map[string]*serviceProcess{
-			"svc-web": {
-				status:        StatusRunning,
-				pid:           os.Getpid(),
-				shellEnvError: "lookpath: empty login envs from bash and zsh",
-				effectivePath: "/opt/shims:/usr/bin:/bin",
-				desired:       true,
-				lastStartedAt: "2026-01-01T00:00:00Z",
-				logPath:       filepath.Join(t.TempDir(), "svc-web.log"),
-			},
+		defs: []ServiceDefinition{def},
+		hops: make(map[string]*forwardHop),
+	}
+	procs := map[string]service.Process{
+		"svc-web": {
+			Definition:    toServiceDefinition(def),
+			State:         service.StateRunning,
+			PID:           os.Getpid(),
+			ShellEnvError: "lookpath: empty login envs from bash and zsh",
+			EffectivePath: "/opt/shims:/usr/bin:/bin",
+			Desired:       true,
+			LastStartedAt: "2026-01-01T00:00:00Z",
+			LogPath:       filepath.Join(t.TempDir(), "svc-web.log"),
 		},
 	}
 
-	list := m.buildStatusListLocked(m.definitions)
+	list := m.buildStatusListLocked(m.defs, procs)
 	if len(list) != 1 {
 		t.Fatalf("status count = %d, want 1", len(list))
 	}
@@ -151,11 +154,11 @@ func TestStatusFallsBackToStaticPathWithoutStart(t *testing.T) {
 		ExtraPath: "/opt/shims",
 	}
 	m := &Manager{
-		definitions: []ServiceDefinition{def},
-		processes:   map[string]*serviceProcess{},
+		defs: []ServiceDefinition{def},
+		hops: make(map[string]*forwardHop),
 	}
 
-	list := m.buildStatusListLocked(m.definitions)
+	list := m.buildStatusListLocked(m.defs, map[string]service.Process{})
 	if len(list) != 1 {
 		t.Fatalf("status count = %d, want 1", len(list))
 	}
