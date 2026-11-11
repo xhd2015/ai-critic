@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
 // UpgradeEventKind is the shape of one streamed upgrade event.
@@ -226,8 +228,8 @@ func (r *upgradeRunner) run(step ServiceUpgradeStep) error {
 		_, _ = logFile.WriteString(marker)
 	}
 
-	workingDir := normalizeWorkingDir(r.def.WorkingDir)
-	if err := ensureServiceWorkingDir(workingDir); err != nil {
+	workingDir := service.NormalizeWorkingDir(r.def.WorkingDir)
+	if err := service.EnsureWorkingDir(workingDir); err != nil {
 		return stepError(step, -1, err)
 	}
 
@@ -256,7 +258,7 @@ func (r *upgradeRunner) run(step ServiceUpgradeStep) error {
 		case <-timer.C:
 			timedOut = true
 			// Kill the whole group: a build's children must not outlive it.
-			_ = stopProcessGroup(cmd.Process.Pid)
+			_ = service.StopProcessGroup(cmd.Process.Pid)
 			waitErr = <-done
 		}
 	} else {
@@ -366,8 +368,8 @@ func (o *upgradeStepOutput) Tail() []string {
 // which a login shell would otherwise reset (see the service start path).
 func buildUpgradeShellCommand(command string, env []string) string {
 	parts := []string{"set -eo pipefail"}
-	if pathVal := lookupEnvValue(env, "PATH"); pathVal != "" {
-		parts = append(parts, "export PATH="+shellQuote(pathVal))
+	if pathVal := service.EnvValue(env, "PATH"); pathVal != "" {
+		parts = append(parts, "export PATH="+service.ShellQuote(pathVal))
 	}
 	parts = append(parts, command)
 	return strings.Join(parts, "; ")

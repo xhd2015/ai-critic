@@ -206,8 +206,8 @@ func TestEnsureServiceWorkingDirCreatesMissingDirectory(t *testing.T) {
 	base := t.TempDir()
 	workingDir := filepath.Join(base, "nested", "my-openclaw")
 
-	if err := ensureServiceWorkingDir(workingDir); err != nil {
-		t.Fatalf("ensureServiceWorkingDir() error = %v", err)
+	if err := EnsureServiceWorkingDir(workingDir); err != nil {
+		t.Fatalf("EnsureServiceWorkingDir() error = %v", err)
 	}
 	info, err := os.Stat(workingDir)
 	if err != nil {
@@ -219,8 +219,8 @@ func TestEnsureServiceWorkingDirCreatesMissingDirectory(t *testing.T) {
 }
 
 func TestEnsureServiceWorkingDirNoopsForEmptyPath(t *testing.T) {
-	if err := ensureServiceWorkingDir(""); err != nil {
-		t.Fatalf("ensureServiceWorkingDir(\"\") error = %v", err)
+	if err := EnsureServiceWorkingDir(""); err != nil {
+		t.Fatalf("EnsureServiceWorkingDir(\"\") error = %v", err)
 	}
 }
 

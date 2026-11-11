@@ -182,7 +182,7 @@ func TestReconcileOrphansKillsPreviousInstanceProcess(t *testing.T) {
 	if len(reclaimed) != 1 {
 		t.Fatalf("ReconcileOrphans() = %v, want one reclaimed process", reclaimed)
 	}
-	if processAlive(orphanPID) {
+	if service.Alive(orphanPID) {
 		t.Fatalf("orphan pid %d survived reconciliation", orphanPID)
 	}
 	if !waitForServing(t, port, false, 10*time.Second) {
@@ -220,7 +220,7 @@ func TestReconcileOrphansIgnoresRecycledPID(t *testing.T) {
 	if reclaimed := m.ReconcileOrphans(); len(reclaimed) != 0 {
 		t.Fatalf("ReconcileOrphans() killed an unrelated process: %v", reclaimed)
 	}
-	if !processAlive(os.Getpid()) {
+	if !service.Alive(os.Getpid()) {
 		t.Fatal("test process was killed by reconciliation")
 	}
 }

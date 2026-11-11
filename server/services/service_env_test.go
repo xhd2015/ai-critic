@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xhd2015/ai-critic/server/procenv"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
@@ -174,7 +173,7 @@ func TestBuildServiceEnvForStartReportsShellEnvError(t *testing.T) {
 	useTempServicesConfig(t)
 	old := resolveStartEnv
 	t.Cleanup(func() { resolveStartEnv = old })
-	resolveStartEnv = func(opts procenv.Options) ([]string, error) {
+	resolveStartEnv = func(opts service.EnvOptions) ([]string, error) {
 		if !opts.InheritShellEnv {
 			return []string{"PATH=/usr/bin"}, nil
 		}
@@ -193,8 +192,8 @@ func TestBuildServiceEnvForStartReportsShellEnvError(t *testing.T) {
 	if !strings.Contains(msg, "empty environment") {
 		t.Fatalf("msg = %q, want shell env failure", msg)
 	}
-	if lookupEnvValue(env, "PATH") != "/opt/shims:/usr/bin" {
-		t.Fatalf("PATH = %q, want degraded env still used", lookupEnvValue(env, "PATH"))
+	if service.EnvValue(env, "PATH") != "/opt/shims:/usr/bin" {
+		t.Fatalf("PATH = %q, want degraded env still used", service.EnvValue(env, "PATH"))
 	}
 
 	if _, msg := buildServiceEnvForStart(ServiceDefinition{Name: "web", Command: "run"}); msg != "" {

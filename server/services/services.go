@@ -7,22 +7,19 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/xhd2015/ai-critic/server/auth"
 	"github.com/xhd2015/ai-critic/server/cloudflare"
 	"github.com/xhd2015/ai-critic/server/config"
-	"github.com/xhd2015/ai-critic/server/procenv"
 	"github.com/xhd2015/ai-critic/server/proxy/portforward"
 	"github.com/xhd2015/ai-critic/server/services/authproxy"
 	"github.com/xhd2015/ai-critic/server/streaming/progress"
+	"github.com/xhd2015/ai-critic/server/tools"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
@@ -38,6 +35,11 @@ const (
 	AuthTokenModeShared = "shared"
 	AuthTokenModeCustom = "custom"
 )
+
+// pendingServiceID stands in for the id a create has not minted yet so that
+// validateDefinition can delegate to service.ValidateDefinition, which requires
+// a non-empty id. The value never reaches services.json.
+const pendingServiceID = "pending-service-id"
 
 const (
 	restartBackoffBase   = 1 * time.Second
@@ -326,8 +328,8 @@ func NewManager() *Manager {
 func NewManagerFromDefinitions(defs []ServiceDefinition) *Manager {
 	normalized := make([]ServiceDefinition, 0, len(defs))
 	for _, d := range defs {
-		d.WorkingDir = normalizeWorkingDir(d.WorkingDir)
-		d.ExtraEnv = normalizeExtraEnv(d.ExtraEnv)
+		d.WorkingDir = service.NormalizeWorkingDir(d.WorkingDir)
+		d.ExtraEnv = service.NormalizeEnv(d.ExtraEnv)
 		d.UpgradeTarget = strings.TrimSpace(d.UpgradeTarget)
 		normalizeAuthFields(&d)
 		normalized = append(normalized, d)
@@ -366,7 +368,7 @@ func newManagerAt(configPath, dataDir string) *Manager {
 	}
 	m.sup = service.NewSupervisor(service.Options{
 		DataDir: dataDir,
-		LogDir:  filepath.Join(m.servicesDataDir(), "services"),
+		LogDir:  m.servicesLogDir(),
 		Prepare: m.prepareStart,
 		Started: m.started,
 		Env:     m.buildEnv,
@@ -444,6 +446,12 @@ func (m *Manager) servicesDataDir() string {
 	return config.DataDir
 }
 
+// servicesLogDir is the single source of the service log directory: the
+// supervisor writes <id>.log there and m.serviceLogPath reads it back.
+func (m *Manager) servicesLogDir() string {
+	return filepath.Join(m.servicesDataDir(), "services")
+}
+
 func (m *Manager) loadDefinitionsLocked() {
 	data, err := os.ReadFile(m.servicesFile())
 	if err != nil {
@@ -461,8 +469,8 @@ func (m *Manager) loadDefinitionsLocked() {
 
 	for i := range defs {
 		// Legacy projectDir in services.json is ignored (field removed).
-		defs[i].WorkingDir = normalizeWorkingDir(defs[i].WorkingDir)
-		defs[i].ExtraEnv = normalizeExtraEnv(defs[i].ExtraEnv)
+		defs[i].WorkingDir = service.NormalizeWorkingDir(defs[i].WorkingDir)
+		defs[i].ExtraEnv = service.NormalizeEnv(defs[i].ExtraEnv)
 		defs[i].UpgradeTarget = strings.TrimSpace(defs[i].UpgradeTarget)
 		normalizeAuthFields(&defs[i])
 	}
@@ -610,9 +618,9 @@ func (m *Manager) CreateOrUpdateNoRestart(def ServiceDefinition) (*ServiceStatus
 }
 
 func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*ServiceStatus, error) {
-	def.WorkingDir = normalizeWorkingDir(def.WorkingDir)
-	def.ExtraEnv = normalizeExtraEnv(def.ExtraEnv)
-	normalizedExtraPath, err := procenv.NormalizeExtraPath(def.ExtraPath)
+	def.WorkingDir = service.NormalizeWorkingDir(def.WorkingDir)
+	def.ExtraEnv = service.NormalizeEnv(def.ExtraEnv)
+	normalizedExtraPath, err := service.NormalizeExtraPath(def.ExtraPath)
 	if err != nil {
 		return nil, fmt.Errorf("extra path: %w", err)
 	}
@@ -624,6 +632,11 @@ func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*S
 		return nil, fmt.Errorf("upgrade timeout must not be negative")
 	}
 	normalizeAuthFields(&def)
+	// Mint the id before validation: service.ValidateDefinition requires one and
+	// the id is the only field a create leaves empty.
+	if strings.TrimSpace(def.ID) == "" {
+		def.ID = fmt.Sprintf("svc-%d", time.Now().UnixNano())
+	}
 	// A write addressed at a system service must not create a user service with
 	// the same id, which would shadow the registered one. Checked before
 	// validation so the error names the real problem.
@@ -639,34 +652,27 @@ func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*S
 	var shouldRestart bool
 
 	m.mu.Lock()
-	if def.ID == "" {
-		def.ID = fmt.Sprintf("svc-%d", time.Now().UnixNano())
+	for i := range m.defs {
+		if m.defs[i].ID != def.ID {
+			continue
+		}
+		existingCopy := m.defs[i]
+		existing = &existingCopy
+		if def.UpgradeTarget == "" {
+			def.UpgradeTarget = m.defs[i].UpgradeTarget
+		}
+		if def.Enabled == nil {
+			def.Enabled = m.defs[i].Enabled
+		}
+		def.CreatedAt = m.defs[i].CreatedAt
+		def.UpdatedAt = now
+		m.defs[i] = def
+		break
+	}
+	if existing == nil {
 		def.CreatedAt = now
 		def.UpdatedAt = now
 		m.defs = append(m.defs, def)
-	} else {
-		for i := range m.defs {
-			if m.defs[i].ID != def.ID {
-				continue
-			}
-			existingCopy := m.defs[i]
-			existing = &existingCopy
-			if def.UpgradeTarget == "" {
-				def.UpgradeTarget = m.defs[i].UpgradeTarget
-			}
-			if def.Enabled == nil {
-				def.Enabled = m.defs[i].Enabled
-			}
-			def.CreatedAt = m.defs[i].CreatedAt
-			def.UpdatedAt = now
-			m.defs[i] = def
-			break
-		}
-		if existing == nil {
-			def.CreatedAt = now
-			def.UpdatedAt = now
-			m.defs = append(m.defs, def)
-		}
 	}
 	if err := m.saveDefinitionsLocked(); err != nil {
 		m.mu.Unlock()
@@ -940,7 +946,7 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 			if proc.LogPath != "" {
 				logPath = proc.LogPath
 			}
-			if pid > 0 && !processAlive(pid) {
+			if pid > 0 && !service.Alive(pid) {
 				pid = 0
 				if status == StatusRunning {
 					status = StatusStopped
@@ -953,7 +959,7 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 		if effectivePath == "" {
 			// No start yet: show the static PATH layers. The interactive shell
 			// env is deliberately not probed here; this runs on every list poll.
-			effectivePath = lookupEnvValue(buildServiceEnv(def), "PATH")
+			effectivePath = service.EnvValue(buildServiceEnv(def), "PATH")
 		}
 
 		var pfStatus *ServicePortForwardStatus
@@ -989,7 +995,7 @@ func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[stri
 			Kind:                       ServiceKindUser,
 			Command:                    def.Command,
 			WorkingDir:                 def.WorkingDir,
-			ExtraEnv:                   cloneStringMap(def.ExtraEnv),
+			ExtraEnv:                   service.CloneStringMap(def.ExtraEnv),
 			ExtraPath:                  def.ExtraPath,
 			InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
 			ShellEnvError:              shellEnvError,
@@ -1492,19 +1498,14 @@ func normalizeProvider(provider string) string {
 }
 
 func validateDefinition(def ServiceDefinition) error {
-	if strings.TrimSpace(def.Name) == "" {
-		return fmt.Errorf("service name is required")
+	shared := toServiceDefinition(def)
+	if shared.ID == "" {
+		// dot-pkgs validates the id too; the host mints one after validation,
+		// so stand in for it here and keep this function's contract unchanged.
+		shared.ID = pendingServiceID
 	}
-	if strings.TrimSpace(def.Command) == "" {
-		return fmt.Errorf("service command is required")
-	}
-	for key := range def.ExtraEnv {
-		if !isValidEnvKey(key) {
-			return fmt.Errorf("invalid environment variable name: %s", key)
-		}
-	}
-	if _, err := procenv.NormalizeExtraPath(def.ExtraPath); err != nil {
-		return fmt.Errorf("extra path: %w", err)
+	if err := service.ValidateDefinition(shared); err != nil {
+		return err
 	}
 	if def.PortForward != nil {
 		if def.PortForward.Port <= 0 || def.PortForward.Port > 65535 {
@@ -1568,7 +1569,7 @@ func definitionChanged(oldDef ServiceDefinition, newDef ServiceDefinition) bool 
 	if oldDef.Name != newDef.Name || oldDef.Command != newDef.Command || oldDef.WorkingDir != newDef.WorkingDir {
 		return true
 	}
-	if !stringMapEqual(oldDef.ExtraEnv, newDef.ExtraEnv) {
+	if !service.StringMapEqual(oldDef.ExtraEnv, newDef.ExtraEnv) {
 		return true
 	}
 	if oldDef.ExtraPath != newDef.ExtraPath {
@@ -1622,7 +1623,7 @@ func killConfiguredPortOwner(pf *ServicePortForward) error {
 	if pf == nil || pf.Port <= 0 {
 		return nil
 	}
-	pids, err := findListeningPIDs(pf.Port)
+	pids, err := service.ListeningPIDs(pf.Port)
 	if err != nil {
 		return err
 	}
@@ -1630,190 +1631,27 @@ func killConfiguredPortOwner(pf *ServicePortForward) error {
 		if pid == os.Getpid() {
 			return fmt.Errorf("refusing to kill current server process on port %d", pf.Port)
 		}
-		if err := stopProcessGroup(pid); err != nil {
+		if err := service.StopProcessGroup(pid); err != nil {
 			return fmt.Errorf("failed to free port %d: %w", pf.Port, err)
 		}
 	}
 	return nil
 }
 
-func findListeningPIDs(port int) ([]int, error) {
-	cmd := exec.Command("lsof", "-tiTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-n", "-P")
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) == 0 {
-			return nil, nil
-		}
-		if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
-			return nil, fmt.Errorf("lsof not installed: required for service port management")
-		}
-		return nil, err
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var pids []int
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		pid, convErr := strconv.Atoi(line)
-		if convErr == nil && pid > 0 {
-			pids = append(pids, pid)
-		}
-	}
-	return pids, nil
-}
-
-func processGroupID(pid int) (int, error) {
-	pgid, err := syscall.Getpgid(pid)
-	if err != nil {
-		return 0, err
-	}
-	return pgid, nil
-}
-
-func stopProcessGroup(pid int) error {
-	if pid <= 0 {
-		return nil
-	}
-
-	pgid, err := processGroupID(pid)
-	if err != nil {
-		// Fall back to signaling the process directly when PGID lookup fails.
-		return signalProcessUntilExit(pid, pid, 3*time.Second, 2*time.Second)
-	}
-	return signalProcessUntilExit(pid, pgid, 3*time.Second, 2*time.Second)
-}
-
-func signalProcessUntilExit(pid, signalTarget int, termTimeout, killTimeout time.Duration) error {
-	_ = syscall.Kill(-signalTarget, syscall.SIGTERM)
-	deadline := time.Now().Add(termTimeout)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	_ = syscall.Kill(-signalTarget, syscall.SIGKILL)
-	if signalTarget != pid {
-		_ = syscall.Kill(pid, syscall.SIGKILL)
-	}
-	deadline = time.Now().Add(killTimeout)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("process %d did not exit", pid)
-}
-
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	// Zombie PIDs still succeed kill(pid, 0) on Linux until the parent reaps
-	// them. Treating them as alive makes stop/restart fail with
-	// "process N did not exit" (e.g. service domain save on /service).
-	if processZombie(pid) {
-		return false
-	}
-	return syscall.Kill(pid, 0) == nil
-}
-
-// processZombie reports whether pid exists as a zombie (Linux /proc).
-// Non-Linux or unreadable /proc yields false (caller falls back to kill(0)).
-func processZombie(pid int) bool {
-	state, ok := processState(pid)
-	return ok && state == 'Z'
-}
-
-// processState reads the state char from /proc/<pid>/stat ("R","S","Z",…).
-func processState(pid int) (state byte, ok bool) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return 0, false
-	}
-	return parseProcStatState(data)
-}
-
-// parseProcStatState extracts the state field from a /proc/<pid>/stat line.
-// Format: pid (comm) state ... — comm may contain spaces and parentheses.
-func parseProcStatState(stat []byte) (state byte, ok bool) {
-	s := string(stat)
-	i := strings.LastIndex(s, ") ")
-	if i < 0 || i+2 >= len(s) {
-		return 0, false
-	}
-	return s[i+2], true
-}
-
 func (m *Manager) serviceLogPath(id string) string {
-	return filepath.Join(m.servicesDataDir(), "services", id+".log")
-}
-
-func serviceLogPath(id string) string {
-	// Package default path (default manager / production).
-	return filepath.Join(config.DataDir, "services", id+".log")
+	return service.LogPath(m.servicesLogDir(), id)
 }
 
 // EnsureServiceWorkingDir creates workingDir (including parents) when non-empty.
 // Used by start and L2 doctests that isolate the mkdir contract.
 func EnsureServiceWorkingDir(workingDir string) error {
-	return ensureServiceWorkingDir(workingDir)
+	return service.EnsureWorkingDir(workingDir)
 }
 
-func ensureServiceWorkingDir(workingDir string) error {
-	workingDir = strings.TrimSpace(workingDir)
-	if workingDir == "" {
-		return nil
-	}
-	if err := os.MkdirAll(workingDir, 0755); err != nil {
-		return fmt.Errorf("create working directory %s: %w", workingDir, err)
-	}
-	return nil
-}
-
-func normalizeWorkingDir(workingDir string) string {
-	workingDir = strings.TrimSpace(workingDir)
-	if workingDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			workingDir = strings.TrimSpace(home)
-		}
-		if workingDir == "" {
-			if cwd, err := os.Getwd(); err == nil {
-				workingDir = cwd
-			}
-		}
-	}
-	if workingDir == "" {
-		return ""
-	}
-	abs, err := filepath.Abs(workingDir)
-	if err != nil {
-		return workingDir
-	}
-	return abs
-}
-
-func normalizeExtraEnv(extraEnv map[string]string) map[string]string {
-	if len(extraEnv) == 0 {
-		return nil
-	}
-	normalized := make(map[string]string, len(extraEnv))
-	for key, value := range extraEnv {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		normalized[key] = value
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-	return normalized
+// serviceEnvBase is the host's starting environment for managed children: the
+// server's own env plus the extra PATH dirs tool resolution adds.
+func serviceEnvBase() []string {
+	return tools.AppendExtraPaths(os.Environ())
 }
 
 // buildServiceEnv builds the static PATH/env layers for a service definition:
@@ -1821,17 +1659,21 @@ func normalizeExtraEnv(extraEnv map[string]string) map[string]string {
 // It never probes an interactive shell, so it stays cheap enough for status
 // polling (buildStatusListLocked runs on every list request).
 func buildServiceEnv(def ServiceDefinition) []string {
-	env, _ := procenv.BuildManagedEnvWithOptions(procenv.Options{
+	env, _ := service.BuildEnv(service.EnvOptions{
+		Base:      serviceEnvBase(),
 		Extra:     def.ExtraEnv,
 		ExtraPath: def.ExtraPath,
 	})
 	return env
 }
 
-// resolveStartEnv is the procenv entry point for real starts. It is a variable
-// so tests can exercise the interactive-shell failure path without spawning a
-// login shell.
-var resolveStartEnv = procenv.BuildManagedEnvWithOptions
+// resolveStartEnv is the service.BuildEnv entry point for real starts. It is a
+// variable so tests can exercise the interactive-shell failure path without
+// spawning a login shell.
+var resolveStartEnv = func(opts service.EnvOptions) ([]string, error) {
+	opts.Base = serviceEnvBase()
+	return service.BuildEnv(opts)
+}
 
 // buildServiceEnvForStart builds the env a real service start (or upgrade step)
 // uses. Unlike buildServiceEnv it honors InheritInteractiveShellEnv, which runs
@@ -1839,7 +1681,7 @@ var resolveStartEnv = procenv.BuildManagedEnvWithOptions
 // human-readable message while the env stays usable: every other layer applies
 // and bash -lc still reads login profiles on its own.
 func buildServiceEnvForStart(def ServiceDefinition) ([]string, string) {
-	env, err := resolveStartEnv(procenv.Options{
+	env, err := resolveStartEnv(service.EnvOptions{
 		Extra:           def.ExtraEnv,
 		ExtraPath:       def.ExtraPath,
 		InheritShellEnv: def.InheritInteractiveShellEnv,
@@ -1848,71 +1690,6 @@ func buildServiceEnvForStart(def ServiceDefinition) ([]string, string) {
 		return env, err.Error()
 	}
 	return env, ""
-}
-
-func lookupEnvValue(env []string, key string) string {
-	prefix := key + "="
-	for _, item := range env {
-		if strings.HasPrefix(item, prefix) {
-			return strings.TrimPrefix(item, prefix)
-		}
-	}
-	return ""
-}
-
-func isValidEnvKey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for i, ch := range key {
-		if i == 0 {
-			if ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') {
-				return false
-			}
-			continue
-		}
-		if ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch <= '9') {
-			return false
-		}
-	}
-	return true
-}
-
-func stringMapEqual(a, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for key, value := range a {
-		if b[key] != value {
-			return false
-		}
-	}
-	return true
-}
-
-func cloneStringMap(src map[string]string) map[string]string {
-	if len(src) == 0 {
-		return nil
-	}
-	dst := make(map[string]string, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
-}
-
-func shellQuote(s string) string {
-	safe := true
-	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '/' || c == '.' || c == '-' || c == '_') {
-			safe = false
-			break
-		}
-	}
-	if safe && s != "" {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func normalizeUpgradeLocalBase(localBase string) string {
