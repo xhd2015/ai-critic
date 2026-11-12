@@ -92,6 +92,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>AI Critic talks to devices on your local network — for example a Raspberry Pi reached over Ethernet or Wi-Fi — when it runs remote-agent commands, SSH sessions and port mappings.</string>
 </dict>
 </plist>
 PLIST
