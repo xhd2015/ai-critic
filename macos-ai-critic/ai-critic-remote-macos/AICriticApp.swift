@@ -460,7 +460,13 @@ final class RemoteAppState: ObservableObject {
 
     /// Fetch git state for listed projects without a cached entry (bounded, cancellable).
     func refreshProjectDetails() async {
-        let pending = projects.map(\.path).filter { projectDetails[$0] == nil }
+        // Only rows that still need git state: registry-only entries without an error.
+        // Rows already carrying `clean` (older servers return full rows in the list)
+        // and rows with a list-level error (missing path) need no extra request.
+        let pending = projects
+            .filter { $0.clean == nil && ($0.error ?? "").isEmpty }
+            .map(\.path)
+            .filter { projectDetails[$0] == nil }
         guard !pending.isEmpty else { return }
         await withTaskGroup(of: (String, WrkProjectStatus?).self) { group in
             var next = 0
