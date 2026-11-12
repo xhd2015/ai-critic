@@ -16,6 +16,9 @@ final class RemoteAppState: ObservableObject {
     @Published var cronTasks: [CronTaskStatus] = []
     @Published var terminals: [TerminalSession] = []
     @Published var projects: [WrkProjectStatus] = []
+    /// Per-project git state, fetched on demand only (Projects page visible).
+    /// The list endpoint is registry-only, so absent rows render as status unknown.
+    @Published var projectDetails: [String: WrkProjectStatus] = [:]
     @Published var projectsLoading = false
     @Published var projectsLoadError: String? = nil
     @Published var domains: [RemoteDomain] = []
@@ -96,6 +99,7 @@ final class RemoteAppState: ObservableObject {
                     cronTasks = []
                     terminals = []
                     projects = []
+                    projectDetails = [:]
                     projectsLoadError = nil
                 }
             } else {
@@ -108,14 +112,16 @@ final class RemoteAppState: ObservableObject {
                 cronTasks = []
                 terminals = []
                 projects = []
+                projectDetails = [:]
                 projectsLoadError = nil
             }
 
             if hasEndpoint {
+                // Projects are not polled: the registry list + per-project git state
+                // is loaded on demand by the Projects page (loadProjectsOnDemand).
                 await refreshServices()
                 await refreshCronTasks()
                 await refreshTerminals()
-                await refreshProjects()
             }
             reloadBackupStateFromDisk()
             startBackupTickLoopIfNeeded()
@@ -132,6 +138,7 @@ final class RemoteAppState: ObservableObject {
             cronTasks = []
             terminals = []
             projects = []
+            projectDetails = [:]
             projectsLoadError = nil
             menuLabel = "Remote …"
             reloadBackupStateFromDisk()
@@ -420,19 +427,76 @@ final class RemoteAppState: ObservableObject {
     func refreshProjects() async {
         guard serviceClient.isConfigured else {
             projects = []
+            projectDetails = [:]
             projectsLoadError = nil
             projectsLoading = false
             return
         }
         projectsLoading = true
         do {
-            projects = try await serviceClient.listWrkProjects()
+            let listed = try await serviceClient.listWrkProjects()
+            projects = listed
+            // Drop cached git state for projects that left the registry.
+            let live = Set(listed.map(\.path))
+            projectDetails = projectDetails.filter { live.contains($0.key) }
             projectsLoadError = nil
             projectsLoading = false
         } catch {
             projectsLoadError = error.localizedDescription
             projectsLoading = false
         }
+    }
+
+    /// Row as rendered: cached git state when present, otherwise the bare list entry.
+    func displayProject(_ project: WrkProjectStatus) -> WrkProjectStatus {
+        projectDetails[project.path] ?? project
+    }
+
+    /// On-demand entry point for the Projects page: list, then per-project git state.
+    func loadProjectsOnDemand() async {
+        await refreshProjects()
+        await refreshProjectDetails()
+    }
+
+    /// Fetch git state for listed projects without a cached entry (bounded, cancellable).
+    func refreshProjectDetails() async {
+        let pending = projects.map(\.path).filter { projectDetails[$0] == nil }
+        guard !pending.isEmpty else { return }
+        await withTaskGroup(of: (String, WrkProjectStatus?).self) { group in
+            var next = 0
+            let initial = min(Self.maxConcurrentProjectStatusRequests, pending.count)
+            while next < initial {
+                let path = pending[next]
+                next += 1
+                group.addTask { (path, await self.fetchProjectStatus(path)) }
+            }
+            while let (path, detail) = await group.next() {
+                if let detail {
+                    projectDetails[path] = detail
+                }
+                if Task.isCancelled {
+                    group.cancelAll()
+                } else if next < pending.count {
+                    let path = pending[next]
+                    next += 1
+                    group.addTask { (path, await self.fetchProjectStatus(path)) }
+                }
+            }
+        }
+    }
+
+    /// Fetch one project's git state, caching the result.
+    func loadProjectDetail(path: String) async {
+        guard projectDetails[path] == nil else { return }
+        if let detail = await fetchProjectStatus(path) {
+            projectDetails[path] = detail
+        }
+    }
+
+    private static let maxConcurrentProjectStatusRequests = 4
+
+    private func fetchProjectStatus(_ path: String) async -> WrkProjectStatus? {
+        try? await serviceClient.wrkProjectStatus(path: path)
     }
 
     /// Persist selected domain as `default` and reload clients (services + terminals + browser).

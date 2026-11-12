@@ -40,7 +40,8 @@ struct LocalMainWindow: View {
                             let task: String? = taskText.isEmpty ? nil : taskText
                             await state.createWorktree(for: project, task: task)
                         }
-                    }
+                    },
+                    onRefresh: { await state.loadProjectsOnDemand() }
                 )
             case .settings:
                 ScrollView {

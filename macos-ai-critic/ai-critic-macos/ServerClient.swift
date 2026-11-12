@@ -199,6 +199,24 @@ final class ServerClient {
         return decoded.projects
     }
 
+    /// Fetch one project's git state via GET /api/wrk/projects/status?path=…
+    /// Called on demand (menu opened / Projects page visible), never by the poll loop.
+    func wrkProjectStatus(path: String) async throws -> WrkProjectStatus {
+        var components = URLComponents(string: baseURL + "/api/wrk/projects/status")
+        components?.queryItems = [URLQueryItem(name: "path", value: path)]
+        guard let url = components?.url else {
+            throw ServerClientError.unreachable("invalid wrk project status url")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyAuth(&request)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ServerClientError.unreachable("wrk project status request failed")
+        }
+        return try JSONDecoder().decode(WrkProjectStatus.self, from: data)
+    }
+
     /// Create a worktree via POST /api/wrk/worktrees.
     /// Empty/whitespace task is sent as omitted (no slug).
     func createWrkWorktree(projectPath: String, task: String? = nil) async throws -> WrkCreateWorktreeResponse {

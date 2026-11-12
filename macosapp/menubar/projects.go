@@ -15,43 +15,74 @@ type WorktreeTitleParts struct {
 
 // FormatProjectTitleParts splits a project row into Leading (name) and Trailing decoration.
 // Non-empty errMsg wins over clean/branch presentation.
-func FormatProjectTitleParts(name, branch string, clean bool, errMsg string) ProjectTitleParts {
+//
+// clean is nil while the per-project git status has not been fetched yet: the
+// list endpoint is registry-only now, so rows render "· branch" (or nothing when
+// the branch is also unknown) instead of a misleading "○" dirty dot.
+func FormatProjectTitleParts(name, branch string, clean *bool, errMsg string) ProjectTitleParts {
 	parts := ProjectTitleParts{Leading: name}
 	if errMsg != "" {
 		parts.Trailing = "⚠ Error"
 		return parts
 	}
-	if clean {
+	switch {
+	case clean == nil:
+		if branch != "" {
+			parts.Trailing = "· " + branch
+		}
+	case *clean:
 		parts.Trailing = "● " + branch
-		return parts
+	default:
+		parts.Trailing = "○ " + branch
 	}
-	parts.Trailing = "○ " + branch
 	return parts
 }
 
 // FormatWorktreeTitleParts splits a worktree row into Leading (name) and Trailing clean/dirty.
-func FormatWorktreeTitleParts(name string, clean bool) WorktreeTitleParts {
-	parts := WorktreeTitleParts{Leading: name}
-	if clean {
-		parts.Trailing = "● Clean"
-		return parts
+func FormatWorktreeTitleParts(name string, clean *bool) WorktreeTitleParts {
+	return WorktreeTitleParts{Leading: name, Trailing: FormatCleanLabel(clean)}
+}
+
+// FormatCleanLabel renders the clean/dirty decoration shared by project and
+// worktree rows. Nil clean means "not fetched yet" and yields no decoration.
+func FormatCleanLabel(clean *bool) string {
+	switch {
+	case clean == nil:
+		return ""
+	case *clean:
+		return "● Clean"
+	default:
+		return "○ Dirty"
 	}
-	parts.Trailing = "○ Dirty"
-	return parts
+}
+
+// FormatCleanPendingLabel is the Projects page placeholder while the on-demand
+// per-project git status is still in flight.
+func FormatCleanPendingLabel() string {
+	return "Status: loading…"
 }
 
 // FormatProjectTitle returns the legacy single-string Projects submenu title.
 // Composed as Leading + "  " + Trailing (double space).
-func FormatProjectTitle(name, branch string, clean bool, errMsg string) string {
+func FormatProjectTitle(name, branch string, clean *bool, errMsg string) string {
 	p := FormatProjectTitleParts(name, branch, clean, errMsg)
-	return p.Leading + "  " + p.Trailing
+	return joinTitleParts(p.Leading, p.Trailing)
 }
 
 // FormatWorktreeTitle returns a legacy single-string linked worktree row title.
 // Composed as Leading + "  " + Trailing (double space).
-func FormatWorktreeTitle(name string, clean bool) string {
+func FormatWorktreeTitle(name string, clean *bool) string {
 	p := FormatWorktreeTitleParts(name, clean)
-	return p.Leading + "  " + p.Trailing
+	return joinTitleParts(p.Leading, p.Trailing)
+}
+
+// joinTitleParts composes a row title; an empty decoration leaves no trailing
+// spaces behind.
+func joinTitleParts(leading, trailing string) string {
+	if trailing == "" {
+		return leading
+	}
+	return leading + "  " + trailing
 }
 
 // FormatProjectsEmptyLabel is shown when the wrk projects registry is empty.

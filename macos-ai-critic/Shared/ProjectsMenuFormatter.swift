@@ -24,9 +24,16 @@ public struct WorktreeTitleParts: Equatable, Sendable {
 
 /// Projects submenu labels — mirrors `macosapp/menubar` project formatters.
 public enum ProjectsMenuFormatter {
-    public static func formatProjectTitleParts(name: String, branch: String, clean: Bool, errMsg: String) -> ProjectTitleParts {
+    /// `clean == nil` means the per-project git status has not been fetched yet
+    /// (the list endpoint is registry-only); the row then shows "· branch" or no
+    /// decoration instead of a misleading "○" dirty dot.
+    public static func formatProjectTitleParts(name: String, branch: String, clean: Bool?, errMsg: String) -> ProjectTitleParts {
         if !errMsg.isEmpty {
             return ProjectTitleParts(leading: name, trailing: "⚠ Error")
+        }
+        guard let clean else {
+            let trailing = branch.isEmpty ? "" : "· \(branch)"
+            return ProjectTitleParts(leading: name, trailing: trailing)
         }
         if clean {
             return ProjectTitleParts(leading: name, trailing: "● \(branch)")
@@ -34,23 +41,37 @@ public enum ProjectsMenuFormatter {
         return ProjectTitleParts(leading: name, trailing: "○ \(branch)")
     }
 
-    public static func formatWorktreeTitleParts(name: String, clean: Bool) -> WorktreeTitleParts {
-        if clean {
-            return WorktreeTitleParts(leading: name, trailing: "● Clean")
-        }
-        return WorktreeTitleParts(leading: name, trailing: "○ Dirty")
+    public static func formatWorktreeTitleParts(name: String, clean: Bool?) -> WorktreeTitleParts {
+        WorktreeTitleParts(leading: name, trailing: formatCleanLabel(clean: clean))
+    }
+
+    /// Clean/dirty decoration shared by project and worktree rows.
+    /// Nil clean ("not fetched yet") yields no decoration.
+    public static func formatCleanLabel(clean: Bool?) -> String {
+        guard let clean else { return "" }
+        return clean ? "● Clean" : "○ Dirty"
+    }
+
+    /// Projects page placeholder while the on-demand git status is in flight.
+    public static func formatCleanPendingLabel() -> String {
+        "Status: loading…"
     }
 
     /// Legacy single-string title: Leading + "  " + Trailing (double space).
-    public static func formatProjectTitle(name: String, branch: String, clean: Bool, errMsg: String) -> String {
+    public static func formatProjectTitle(name: String, branch: String, clean: Bool?, errMsg: String) -> String {
         let parts = formatProjectTitleParts(name: name, branch: branch, clean: clean, errMsg: errMsg)
-        return "\(parts.leading)  \(parts.trailing)"
+        return joinTitleParts(leading: parts.leading, trailing: parts.trailing)
     }
 
     /// Legacy single-string worktree title: Leading + "  " + Trailing (double space).
-    public static func formatWorktreeTitle(name: String, clean: Bool) -> String {
+    public static func formatWorktreeTitle(name: String, clean: Bool?) -> String {
         let parts = formatWorktreeTitleParts(name: name, clean: clean)
-        return "\(parts.leading)  \(parts.trailing)"
+        return joinTitleParts(leading: parts.leading, trailing: parts.trailing)
+    }
+
+    /// Composes a row title; an empty decoration leaves no trailing spaces behind.
+    public static func joinTitleParts(leading: String, trailing: String) -> String {
+        trailing.isEmpty ? leading : "\(leading)  \(trailing)"
     }
 
     public static func formatProjectsEmptyLabel() -> String {

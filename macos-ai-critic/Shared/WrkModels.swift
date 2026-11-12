@@ -1,12 +1,13 @@
 import Foundation
 
-/// One linked worktree from GET /api/wrk/projects.
+/// One linked worktree from GET /api/wrk/projects/status.
 public struct WrkWorktreeStatus: Decodable, Identifiable, Equatable {
     public var id: String { path }
     public let path: String
     public let name: String
     public let branch: String?
-    public let clean: Bool
+    /// Nil until the per-project git status has been fetched (list is registry-only).
+    public let clean: Bool?
     public let isMain: Bool
     public let error: String?
 
@@ -19,7 +20,7 @@ public struct WrkWorktreeStatus: Decodable, Identifiable, Equatable {
         path: String,
         name: String,
         branch: String? = nil,
-        clean: Bool = true,
+        clean: Bool? = nil,
         isMain: Bool = false,
         error: String? = nil
     ) {
@@ -33,6 +34,10 @@ public struct WrkWorktreeStatus: Decodable, Identifiable, Equatable {
 }
 
 /// One wrk-registered project.
+///
+/// GET /api/wrk/projects is registry-only, so `branch`/`commit`/`subject`/`clean`
+/// stay nil (with no `worktrees`) until the row's detail is requested from
+/// GET /api/wrk/projects/status. This keeps menu builds git-free.
 public struct WrkProjectStatus: Decodable, Identifiable, Equatable {
     public var id: String { path }
     public let path: String
@@ -40,7 +45,8 @@ public struct WrkProjectStatus: Decodable, Identifiable, Equatable {
     public let branch: String?
     public let commit: String?
     public let subject: String?
-    public let clean: Bool
+    /// Nil until the per-project git status has been fetched.
+    public let clean: Bool?
     public let error: String?
     public let worktrees: [WrkWorktreeStatus]?
 
@@ -50,7 +56,7 @@ public struct WrkProjectStatus: Decodable, Identifiable, Equatable {
         branch: String? = nil,
         commit: String? = nil,
         subject: String? = nil,
-        clean: Bool = true,
+        clean: Bool? = nil,
         error: String? = nil,
         worktrees: [WrkWorktreeStatus]? = nil
     ) {

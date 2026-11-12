@@ -32,7 +32,8 @@ struct RemoteMainWindow: View {
                     projects: state.projects,
                     loading: state.projectsLoading,
                     loadError: state.projectsLoadError,
-                    notConfigured: !state.hasEndpoint
+                    notConfigured: !state.hasEndpoint,
+                    onRefresh: { await state.loadProjectsOnDemand() }
                 )
             case .settings:
                 ScrollView {

@@ -12,6 +12,10 @@ final class AppState: ObservableObject {
     @Published var cronTasks: [CronTaskStatus] = []
     @Published var terminals: [TerminalSession] = []
     @Published var projects: [WrkProjectStatus] = []
+    /// Per-project git state, fetched on demand only (menu opened / Projects page shown).
+    /// GET /api/wrk/projects is registry-only, so a row without an entry renders as
+    /// "status unknown" instead of guessing clean/dirty.
+    @Published var projectDetails: [String: WrkProjectStatus] = [:]
     /// Top-level bookmark children under the fixed root (folders + urls).
     @Published var bookmarkRoots: [BookmarkNode] = []
     /// True while `listWrkProjects` is in flight (stale-while-revalidate; never clear projects).
@@ -65,16 +69,9 @@ final class AppState: ObservableObject {
             }
         }()
 
-        // Stale-while-revalidate: set loading, do not clear projects.
-        projectsLoading = true
-        async let projectsTask: Result<[WrkProjectStatus], Error> = {
-            do {
-                let listed = try await ServerClient.shared.listWrkProjects()
-                return .success(listed)
-            } catch {
-                return .failure(error)
-            }
-        }()
+        // Projects are deliberately absent: the registry list plus per-project git
+        // state is loaded on demand (menu open / Projects page) so the 30s loop
+        // never triggers a git fan-out.
 
         usageItems = await usageTask
         // Menu-bar label follows the usage payload; do not wait on the slower
@@ -92,17 +89,6 @@ final class AppState: ObservableObject {
         if let listed = await bookmarksTask {
             bookmarkRoots = listed
         }
-        switch await projectsTask {
-        case .success(let listed):
-            projects = listed
-            projectsLoadError = nil
-            projectsLoading = false
-        case .failure(let error):
-            // Keep prior projects; record error for empty-area status.
-            projectsLoadError = error.localizedDescription
-            projectsLoading = false
-        }
-
         do {
             let status = try await DaemonClient.shared.keepAliveStatus()
             daemonStatus = status
@@ -155,7 +141,11 @@ final class AppState: ObservableObject {
         // Stale-while-revalidate: mark loading without clearing projects.
         projectsLoading = true
         do {
-            projects = try await ServerClient.shared.listWrkProjects()
+            let listed = try await ServerClient.shared.listWrkProjects()
+            projects = listed
+            // Drop cached git state for projects that left the registry.
+            let live = Set(listed.map(\.path))
+            projectDetails = projectDetails.filter { live.contains($0.key) }
             projectsLoadError = nil
             projectsLoading = false
         } catch {
@@ -165,12 +155,70 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Row as rendered: cached git state when present, otherwise the bare list entry.
+    func displayProject(_ project: WrkProjectStatus) -> WrkProjectStatus {
+        projectDetails[project.path] ?? project
+    }
+
+    /// On-demand entry point: refresh the (git-free) registry list, then fill in
+    /// git state for each row. Cancelled when the menu closes / page disappears.
+    func loadProjectsOnDemand() async {
+        await refreshProjects()
+        await refreshProjectDetails()
+    }
+
+    /// Fetch git state for listed projects that have no cached entry yet.
+    /// Bounded concurrency keeps a menu open from firing hundreds of git children,
+    /// and closing the menu (SwiftUI cancels `.task`) cancels in-flight requests so
+    /// the server stops its git children too.
+    func refreshProjectDetails() async {
+        let pending = projects.map(\.path).filter { projectDetails[$0] == nil }
+        guard !pending.isEmpty else { return }
+        await withTaskGroup(of: (String, WrkProjectStatus?).self) { group in
+            var next = 0
+            let initial = min(Self.maxConcurrentProjectStatusRequests, pending.count)
+            while next < initial {
+                let path = pending[next]
+                next += 1
+                group.addTask { (path, await AppState.fetchProjectStatus(path)) }
+            }
+            while let (path, detail) = await group.next() {
+                if let detail {
+                    projectDetails[path] = detail
+                }
+                if Task.isCancelled {
+                    group.cancelAll()
+                } else if next < pending.count {
+                    let path = pending[next]
+                    next += 1
+                    group.addTask { (path, await AppState.fetchProjectStatus(path)) }
+                }
+            }
+        }
+    }
+
+    /// Fetch one project's git state, caching the result.
+    func loadProjectDetail(path: String) async {
+        guard projectDetails[path] == nil else { return }
+        if let detail = await AppState.fetchProjectStatus(path) {
+            projectDetails[path] = detail
+        }
+    }
+
+    private static let maxConcurrentProjectStatusRequests = 4
+
+    nonisolated private static func fetchProjectStatus(_ path: String) async -> WrkProjectStatus? {
+        try? await ServerClient.shared.wrkProjectStatus(path: path)
+    }
+
     func createWorktree(for project: WrkProjectStatus, task: String?) async {
         do {
             let created = try await ServerClient.shared.createWrkWorktree(projectPath: project.path, task: task)
-            // Open returned worktree path with reuse, then refresh list.
+            // Open returned worktree path with reuse, then refresh list + this row.
             try? await ServerClient.shared.openITerm2(dir: created.path, mode: "reuse")
             await refreshProjects()
+            projectDetails[project.path] = nil
+            await loadProjectDetail(path: project.path)
         } catch {
             // Leave list as-is; optional: surface alert later.
         }
@@ -457,26 +505,31 @@ private struct MenuBarDropdownContent: View {
                         Text(ProjectsMenuFormatter.formatProjectsLoadingLabel())
                     }
                     ForEach(state.projects) { project in
+                        // Registry row + git state only once the detail call landed.
+                        let detail = state.displayProject(project)
                         let titleParts = ProjectsMenuFormatter.formatProjectTitleParts(
-                            name: project.name,
-                            branch: project.branch ?? "",
-                            clean: project.clean,
-                            errMsg: project.error ?? ""
+                            name: detail.name,
+                            branch: detail.branch ?? "",
+                            clean: detail.clean,
+                            errMsg: detail.error ?? ""
                         )
                         Menu {
-                            if let err = project.error, !err.isEmpty {
+                            if let err = detail.error, !err.isEmpty {
                                 Text(err)
                                     .foregroundStyle(.secondary)
-                            } else {
-                                Text("Branch: \(project.branch ?? "")")
+                            } else if detail.clean == nil {
+                                Text(ProjectsMenuFormatter.formatCleanPendingLabel())
                                     .foregroundStyle(.secondary)
-                                Text(project.clean ? "● Clean" : "○ Dirty")
+                            } else {
+                                Text("Branch: \(detail.branch ?? "")")
+                                    .foregroundStyle(.secondary)
+                                Text(ProjectsMenuFormatter.formatCleanLabel(clean: detail.clean))
                                     .foregroundStyle(.secondary)
                             }
                             Button("Open in iTerm2") {
                                 state.openProjectInITerm2(path: project.path)
                             }
-                            let worktrees = project.worktrees ?? []
+                            let worktrees = detail.worktrees ?? []
                             if !worktrees.isEmpty {
                                 Divider()
                                 ForEach(worktrees) { wt in
@@ -556,7 +609,11 @@ private struct MenuBarDropdownContent: View {
                 }
 
             Button("Refresh") {
-                Task { await state.refresh() }
+                Task {
+                    await state.refresh()
+                    await state.refreshProjects()
+                    await state.refreshProjectDetails()
+                }
             }
 
             Divider()
@@ -575,7 +632,12 @@ private struct MenuBarDropdownContent: View {
         }
         .padding(8)
         .task {
+            // Runs on every menu open and is cancelled on close: this is the only
+            // trigger for the wrk project list + per-project git state.
             await state.refresh()
+        }
+        .task {
+            await state.loadProjectsOnDemand()
         }
     }
 

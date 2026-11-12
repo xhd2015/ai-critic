@@ -9,6 +9,9 @@ public struct ProjectsPage: View {
     public let notConfigured: Bool
     public var onOpenInITerm: ((String) -> Void)?
     public var onNewWorktree: ((WrkProjectStatus) -> Void)?
+    /// Fired when the page appears: loads the project list + per-project git state.
+    /// The app does not poll projects in the background, so the page drives it.
+    public var onRefresh: (() async -> Void)?
 
     public init(
         projects: [WrkProjectStatus],
@@ -16,7 +19,8 @@ public struct ProjectsPage: View {
         loadError: String?,
         notConfigured: Bool = false,
         onOpenInITerm: ((String) -> Void)? = nil,
-        onNewWorktree: ((WrkProjectStatus) -> Void)? = nil
+        onNewWorktree: ((WrkProjectStatus) -> Void)? = nil,
+        onRefresh: (() async -> Void)? = nil
     ) {
         self.projects = projects
         self.loading = loading
@@ -24,6 +28,7 @@ public struct ProjectsPage: View {
         self.notConfigured = notConfigured
         self.onOpenInITerm = onOpenInITerm
         self.onNewWorktree = onNewWorktree
+        self.onRefresh = onRefresh
     }
 
     public var body: some View {
@@ -56,6 +61,11 @@ public struct ProjectsPage: View {
         }
         .navigationTitle("Projects")
         .accessibilityIdentifier("projects-page")
+        .task {
+            if let onRefresh {
+                await onRefresh()
+            }
+        }
     }
 
     @ViewBuilder
@@ -72,7 +82,9 @@ public struct ProjectsPage: View {
             } else {
                 Text("Branch: \(project.branch ?? "")")
                     .foregroundStyle(.secondary)
-                Text(project.clean ? "● Clean" : "○ Dirty")
+                Text(project.clean == nil
+                     ? ProjectsMenuFormatter.formatCleanPendingLabel()
+                     : ProjectsMenuFormatter.formatCleanLabel(clean: project.clean))
                     .foregroundStyle(.secondary)
             }
             if let onOpenInITerm {
@@ -84,7 +96,9 @@ public struct ProjectsPage: View {
                 HStack {
                     Text(wtParts.leading)
                     Spacer()
-                    Text(wtParts.trailing).foregroundStyle(.secondary)
+                    if !wtParts.trailing.isEmpty {
+                        Text(wtParts.trailing).foregroundStyle(.secondary)
+                    }
                     if let onOpenInITerm {
                         Button("Open") { onOpenInITerm(wt.path) }
                             .controlSize(.small)

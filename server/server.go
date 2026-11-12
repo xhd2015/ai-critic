@@ -90,6 +90,7 @@ import (
 	"github.com/xhd2015/ai-critic/server/textconvert"
 	"github.com/xhd2015/ai-critic/server/tools"
 	"github.com/xhd2015/ai-critic/server/usage"
+	"github.com/xhd2015/ai-critic/server/wrkprojects"
 	"github.com/xhd2015/kool/pkgs/web"
 	"github.com/xhd2015/wrk/wrkcli/wrkserver"
 )
@@ -714,8 +715,12 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// Grok/codex usage and debug log APIs (business plane on main server port)
 	usage.RegisterAPI(mux)
 
-	// wrk projects / worktrees API (list + create; host-owned base /api/wrk)
-	wrkserver.New(wrkserver.Options{}).Register(mux, "/api/wrk")
+	// wrk projects / worktrees API (host-owned base /api/wrk).
+	// The project list is served git-free and per-project git state is fetched on
+	// demand (server/wrkprojects); worktree create + ops stream through to wrkserver.
+	wrkFallback := http.NewServeMux()
+	wrkserver.New(wrkserver.Options{}).Register(wrkFallback, "/api/wrk")
+	wrkprojects.Register(mux, "/api/wrk", wrkFallback)
 
 	// Local iTerm2 open / inventory / focus / notes (menu bar + switcher; auth required)
 	localiterm2.Register(mux, &localiterm2.Handler{})

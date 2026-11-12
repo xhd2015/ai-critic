@@ -101,6 +101,25 @@ public final class ServiceClient: @unchecked Sendable {
         return decoded.projects
     }
 
+    /// Fetch one project's git state via GET /api/wrk/projects/status?path=…
+    /// Called on demand only; the list endpoint carries no git data.
+    public func wrkProjectStatus(path: String) async throws -> WrkProjectStatus {
+        guard isConfigured else { throw ServiceClientError.notConfigured }
+        var components = URLComponents(string: baseURL + "/api/wrk/projects/status")
+        components?.queryItems = [URLQueryItem(name: "path", value: path)]
+        guard let url = components?.url else {
+            throw ServiceClientError.unreachable("invalid wrk project status url")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        Self.applyAuth(&request, token: token)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ServiceClientError.unreachable("wrk project status request failed")
+        }
+        return try JSONDecoder().decode(WrkProjectStatus.self, from: data)
+    }
+
     public func listServices() async throws -> [ServiceStatus] {
         let request = try Self.buildListServicesRequest(baseURL: baseURL, token: token)
         let (data, response) = try await session.data(for: request)
