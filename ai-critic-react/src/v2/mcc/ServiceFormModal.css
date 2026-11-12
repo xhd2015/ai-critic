@@ -1,0 +1,85 @@
+/*
+ * ServiceFormModal reuses the shared .mcc-modal-* chrome from
+ * KillProcessModal.css (bottom sheet on phones, centred dialog from 640px) and
+ * only widens it enough for a two-column form.
+ */
+
+.mcc-modal.mcc-modal--form {
+    max-height: min(92dvh, 100%);
+}
+
+/* The dialog itself takes focus on phones (tabIndex -1); a focus ring around
+   the whole sheet is noise, not navigation. */
+.mcc-modal.mcc-modal--form:focus {
+    outline: none;
+}
+
+.mcc-modal--form .mcc-modal-body {
+    padding: 16px 20px;
+}
+
+.mcc-modal--form .mcc-modal-footer {
+    gap: 10px;
+}
+
+.mcc-modal-btn-primary {
+    background: #3b82f6;
+    color: #fff;
+}
+
+.mcc-modal-btn-primary:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+/* Two columns once there is room; the sheet grows instead of scrolling early. */
+@media (min-width: 768px) {
+    .mcc-modal.mcc-modal--form {
+        max-width: 720px;
+        width: min(720px, 100%);
+        max-height: min(86dvh, 100%);
+    }
+
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 16px;
+        align-items: start;
+    }
+
+    /* Long-form fields keep the full width on their own row. */
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(textarea),
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(.mcc-service-inherit),
+    .mcc-modal--form .mcc-form-body .mcc-service-form-grid > .mcc-form-field:has(.mcc-service-detach) {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Keep the port-forward, provider and auth blocks aligned with the grid. */
+.mcc-modal--form .mcc-form-body .mcc-add-port-fields,
+.mcc-modal--form .mcc-form-body .mcc-service-auth-fields {
+    min-width: 0;
+}
+
+.mcc-modal--form .mcc-form-body .mcc-add-port-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 480px) {
+    .mcc-modal--form .mcc-form-body .mcc-add-port-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.mcc-modal--form .mcc-form-body .mcc-form-field,
+.mcc-modal--form .mcc-form-body .mcc-form-field input,
+.mcc-modal--form .mcc-form-body .mcc-form-field textarea {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.mcc-modal--form .mcc-form-body .mcc-provider-options {
+    flex-wrap: wrap;
+}

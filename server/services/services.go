@@ -7,22 +7,20 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/xhd2015/ai-critic/server/auth"
 	"github.com/xhd2015/ai-critic/server/cloudflare"
 	"github.com/xhd2015/ai-critic/server/config"
-	"github.com/xhd2015/ai-critic/server/procenv"
 	"github.com/xhd2015/ai-critic/server/proxy/portforward"
 	"github.com/xhd2015/ai-critic/server/services/authproxy"
 	"github.com/xhd2015/ai-critic/server/streaming/progress"
+	"github.com/xhd2015/ai-critic/server/tools"
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
 const (
@@ -37,6 +35,11 @@ const (
 	AuthTokenModeShared = "shared"
 	AuthTokenModeCustom = "custom"
 )
+
+// pendingServiceID stands in for the id a create has not minted yet so that
+// validateDefinition can delegate to service.ValidateDefinition, which requires
+// a non-empty id. The value never reaches services.json.
+const pendingServiceID = "pending-service-id"
 
 const (
 	restartBackoffBase   = 1 * time.Second
@@ -53,12 +56,21 @@ type ServicePortForward struct {
 }
 
 type ServiceDefinition struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Command     string              `json:"command"`
-	WorkingDir  string              `json:"workingDir,omitempty"`
-	ExtraEnv    map[string]string   `json:"extraEnv,omitempty"`
-	PortForward *ServicePortForward `json:"portForward,omitempty"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Command    string            `json:"command"`
+	WorkingDir string            `json:"workingDir,omitempty"`
+	ExtraEnv   map[string]string `json:"extraEnv,omitempty"`
+	// ExtraPath is a PATH-style directory list prepended to the service PATH on
+	// top of whatever the process/shell env already provides. It is for tool
+	// shims (nvm, volta, ~/bin) without rewriting PATH wholesale.
+	ExtraPath string `json:"extraPath,omitempty"`
+	// InheritInteractiveShellEnv merges the environment of an interactive login
+	// shell ($SHELL -lic 'env -0') into the service env, so tools exported from
+	// ~/.zshrc or ~/.bashrc resolve like they do in a terminal. It is resolved on
+	// every start; a probe failure is reported, never fatal.
+	InheritInteractiveShellEnv bool                `json:"inheritInteractiveShellEnv,omitempty"`
+	PortForward                *ServicePortForward `json:"portForward,omitempty"`
 	// UpgradeTarget remembers the remote binary path used by remote-agent
 	// service upgrade. It does not affect the running command itself.
 	UpgradeTarget string `json:"upgradeTarget,omitempty"`
@@ -77,6 +89,10 @@ type ServiceDefinition struct {
 	// Enabled controls boot auto-start and daemon reconcile. Defaults to true
 	// when absent. Disable/enable do not immediately stop or start processes.
 	Enabled *bool `json:"enabled,omitempty"`
+	// Detached keeps the process running after this host exits (app quit,
+	// keep-alive restart, crash). Like Enabled it is a start-time setting: the
+	// edit applies on the next start and never restarts a running service.
+	Detached bool `json:"detached,omitempty"`
 	// RequireAuth gates the public URL with an in-process cookie login hop.
 	RequireAuth   bool   `json:"requireAuth,omitempty"`
 	AuthUser      string `json:"authUser,omitempty"`
@@ -99,24 +115,37 @@ type ServicePortForwardStatus struct {
 }
 
 type ServiceStatus struct {
-	ID             string                    `json:"id"`
-	Name           string                    `json:"name"`
-	Kind           ServiceKind               `json:"kind"`
-	Description    string                    `json:"description,omitempty"`
-	Command        string                    `json:"command"`
-	WorkingDir     string                    `json:"workingDir,omitempty"`
-	ExtraEnv       map[string]string         `json:"extraEnv,omitempty"`
-	EffectivePath  string                    `json:"effectivePath,omitempty"`
-	LogPath        string                    `json:"logPath"`
-	Status         string                    `json:"status"`
-	PID            int                       `json:"pid"`
-	LastStartedAt  string                    `json:"lastStartedAt,omitempty"`
-	LastExitedAt   string                    `json:"lastExitedAt,omitempty"`
-	LastExitError  string                    `json:"lastExitError,omitempty"`
-	DesiredRunning bool                      `json:"desiredRunning"`
-	Enabled        bool                      `json:"enabled"`
-	PortForward    *ServicePortForwardStatus `json:"portForward,omitempty"`
-	UpgradeTarget  string                    `json:"upgradeTarget,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Kind        ServiceKind       `json:"kind"`
+	Description string            `json:"description,omitempty"`
+	Command     string            `json:"command"`
+	WorkingDir  string            `json:"workingDir,omitempty"`
+	ExtraEnv    map[string]string `json:"extraEnv,omitempty"`
+	ExtraPath   string            `json:"extraPath,omitempty"`
+	// InheritInteractiveShellEnv mirrors the definition so the GUI can show the
+	// toggle's state; ShellEnvError reports the last start-time probe failure.
+	InheritInteractiveShellEnv bool   `json:"inheritInteractiveShellEnv,omitempty"`
+	ShellEnvError              string `json:"shellEnvError,omitempty"`
+	EffectivePath              string `json:"effectivePath,omitempty"`
+	LogPath                    string `json:"logPath"`
+	Status                     string `json:"status"`
+	PID                        int    `json:"pid"`
+	LastStartedAt              string `json:"lastStartedAt,omitempty"`
+	LastExitedAt               string `json:"lastExitedAt,omitempty"`
+	LastExitError              string `json:"lastExitError,omitempty"`
+	DesiredRunning             bool   `json:"desiredRunning"`
+	Enabled                    bool   `json:"enabled"`
+	// Detached is the saved lifetime setting; DetachedActive is how the running
+	// process was actually started. They differ while a change waits for a
+	// restart, which is what the GUI's "restart to apply" hint reports.
+	Detached       bool `json:"detached"`
+	DetachedActive bool `json:"detachedActive"`
+	// Adopted marks a process taken over from a previous host instance (a
+	// detached service that outlived it) rather than started here.
+	Adopted       bool                      `json:"adopted,omitempty"`
+	PortForward   *ServicePortForwardStatus `json:"portForward,omitempty"`
+	UpgradeTarget string                    `json:"upgradeTarget,omitempty"`
 	// UpgradePreStopCmds and UpgradePostStopCmds mirror the definition so a
 	// service update round-trip preserves them.
 	UpgradePreStopCmds    []string `json:"upgradePreStopCmds,omitempty"`
@@ -269,34 +298,25 @@ type serviceUpgradeTargetSelection struct {
 	Remembered string
 }
 
-type serviceProcess struct {
-	def                 ServiceDefinition
-	cmd                 *exec.Cmd
-	pid                 int
-	status              string
-	logPath             string
-	lastStartedAt       string
-	lastExitedAt        string
-	lastExitError       string
-	desired             bool
-	stopRequested       bool
-	ownedForward        bool
-	authProxy           *authproxy.Server
-	tunneledPort        int
-	runStartedAt        time.Time
-	consecutiveFailures int
-	nextRestartAt       time.Time
+// forwardHop is the per-service port-forward/auth-proxy state the Manager owns.
+// Process lifetime lives in the shared service.Supervisor; only the forwarding
+// bookkeeping is host-specific.
+type forwardHop struct {
+	authProxy    *authproxy.Server
+	tunneledPort int
+	ownedForward bool
 }
 
 type Manager struct {
-	mu                 sync.Mutex
-	definitions        []ServiceDefinition
-	systemServices     []SystemService
+	mu     sync.Mutex
+	defs   []ServiceDefinition
+	system *service.SystemRegistry
+	// bootAutostartIDs remembers which services were enabled at boot so the
+	// health check never resurrects one the user disabled mid-run.
 	bootAutostartIDs   []string
 	bootAutostartSet   bool
-	processes          map[string]*serviceProcess
-	healthStop         chan struct{}
-	healthStarted      bool
+	hops               map[string]*forwardHop
+	sup                *service.Supervisor
 	portForwardManager *portforward.Manager
 	// Optional isolation for L2 tests; empty → package defaults.
 	configPath string
@@ -309,11 +329,9 @@ var (
 )
 
 func NewManager() *Manager {
-	m := &Manager{
-		processes:          make(map[string]*serviceProcess),
-		portForwardManager: portforward.GetDefaultManager(),
-	}
+	m := newManagerAt("", "")
 	m.loadDefinitionsLocked()
+	m.syncSupervisor()
 	return m
 }
 
@@ -322,18 +340,19 @@ func NewManager() *Manager {
 func NewManagerFromDefinitions(defs []ServiceDefinition) *Manager {
 	normalized := make([]ServiceDefinition, 0, len(defs))
 	for _, d := range defs {
-		d.WorkingDir = normalizeWorkingDir(d.WorkingDir)
-		d.ExtraEnv = normalizeExtraEnv(d.ExtraEnv)
+		d.WorkingDir = service.NormalizeWorkingDir(d.WorkingDir)
+		d.ExtraEnv = service.NormalizeEnv(d.ExtraEnv)
 		d.UpgradeTarget = strings.TrimSpace(d.UpgradeTarget)
 		normalizeAuthFields(&d)
 		normalized = append(normalized, d)
 	}
-	return &Manager{
-		definitions:        normalized,
-		processes:          make(map[string]*serviceProcess),
-		portForwardManager: portforward.GetDefaultManager(),
-		bootAutostartSet:   true,
-	}
+	m := newManagerAt("", "")
+	m.mu.Lock()
+	m.defs = normalized
+	m.bootAutostartSet = true
+	m.mu.Unlock()
+	m.syncSupervisor()
+	return m
 }
 
 // NewManagerAt loads definitions from configDir/services.json and writes
@@ -343,13 +362,33 @@ func NewManagerAt(configDir string) *Manager {
 	if configDir == "" {
 		return NewManager()
 	}
-	m := &Manager{
-		processes:          make(map[string]*serviceProcess),
-		portForwardManager: portforward.GetDefaultManager(),
-		configPath:         filepath.Join(configDir, "services.json"),
-		dataDir:            configDir,
-	}
+	m := newManagerAt(filepath.Join(configDir, "services.json"), configDir)
 	m.loadDefinitionsLocked()
+	m.syncSupervisor()
+	return m
+}
+
+// newManagerAt wires a Manager to a shared service.Supervisor. configPath == ""
+// means "use the package default"; dataDir == "" means "use the package
+// default data dir" for logs, runtime state, and the auth-proxy secret.
+func newManagerAt(configPath, dataDir string) *Manager {
+	m := &Manager{
+		hops:               make(map[string]*forwardHop),
+		portForwardManager: portforward.GetDefaultManager(),
+		configPath:         configPath,
+		dataDir:            dataDir,
+	}
+	m.sup = service.NewSupervisor(service.Options{
+		// Always a concrete dir: the supervisor only tracks runtime records
+		// (needed to adopt detached survivors) when this is non-empty, and an
+		// empty dataDir here means "use the package default", not "disabled".
+		DataDir: m.servicesDataDir(),
+		LogDir:  m.servicesLogDir(),
+		Prepare: m.prepareStart,
+		Started: m.started,
+		Env:     m.buildEnv,
+	})
+	m.system = m.sup.Registry()
 	return m
 }
 
@@ -422,11 +461,17 @@ func (m *Manager) servicesDataDir() string {
 	return config.DataDir
 }
 
+// servicesLogDir is the single source of the service log directory: the
+// supervisor writes <id>.log there and m.serviceLogPath reads it back.
+func (m *Manager) servicesLogDir() string {
+	return filepath.Join(m.servicesDataDir(), "services")
+}
+
 func (m *Manager) loadDefinitionsLocked() {
 	data, err := os.ReadFile(m.servicesFile())
 	if err != nil {
 		if os.IsNotExist(err) {
-			m.definitions = []ServiceDefinition{}
+			m.defs = []ServiceDefinition{}
 		}
 		return
 	}
@@ -439,12 +484,12 @@ func (m *Manager) loadDefinitionsLocked() {
 
 	for i := range defs {
 		// Legacy projectDir in services.json is ignored (field removed).
-		defs[i].WorkingDir = normalizeWorkingDir(defs[i].WorkingDir)
-		defs[i].ExtraEnv = normalizeExtraEnv(defs[i].ExtraEnv)
+		defs[i].WorkingDir = service.NormalizeWorkingDir(defs[i].WorkingDir)
+		defs[i].ExtraEnv = service.NormalizeEnv(defs[i].ExtraEnv)
 		defs[i].UpgradeTarget = strings.TrimSpace(defs[i].UpgradeTarget)
 		normalizeAuthFields(&defs[i])
 	}
-	m.definitions = defs
+	m.defs = defs
 	if !m.bootAutostartSet {
 		for _, def := range defs {
 			if serviceEnabled(def) {
@@ -460,37 +505,33 @@ func (m *Manager) saveDefinitionsLocked() error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(m.definitions, "", "  ")
+	data, err := json.MarshalIndent(m.defs, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(m.servicesFile(), data, 0600)
 }
 
-func (m *Manager) StartHealthCheck() {
-	m.mu.Lock()
-	if m.healthStarted {
-		m.mu.Unlock()
+// syncSupervisor mirrors the persisted definitions into the shared supervisor.
+// It never starts or stops anything: live processes keep running, and only
+// definitions that disappeared are torn down by the supervisor itself.
+func (m *Manager) syncSupervisor() {
+	if m.sup == nil {
 		return
 	}
-	m.healthStarted = true
-	m.healthStop = make(chan struct{})
-	stopCh := m.healthStop
+	m.mu.Lock()
+	defs := make([]service.Definition, 0, len(m.defs))
+	for _, def := range m.defs {
+		defs = append(defs, toServiceDefinition(def))
+	}
 	m.mu.Unlock()
+	if err := m.sup.Define(defs); err != nil {
+		fmt.Printf("[services] failed to sync service definitions: %v\n", err)
+	}
+}
 
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-stopCh:
-				return
-			case <-ticker.C:
-				m.reconcileProcesses()
-			}
-		}
-	}()
+func (m *Manager) StartHealthCheck() {
+	m.sup.StartHealthCheck(0)
 }
 
 func (m *Manager) AutoStartConfiguredServices() {
@@ -527,25 +568,27 @@ func (m *Manager) AutoStartConfiguredServices() {
 	}
 }
 
-// Shutdown stops every managed service. Stops run concurrently: each waits up
-// to 5s for its process to die, so stopping a fleet sequentially can outlast the
-// caller's cleanup budget and leave the last services running when the process
-// is replaced.
+// Shutdown stops every managed service, giving detached ones a pass: the user
+// asked those processes to outlive this host, so they keep running and the next
+// instance adopts them. Their port forwards and tunnels are host-owned and are
+// re-established after adoption. Only the lifetime the process actually runs
+// with counts, so a service whose Detached flag was saved mid-run still stops
+// here until it is restarted.
 func (m *Manager) Shutdown() {
+	detached := m.detachedIDs()
 	m.mu.Lock()
-	var ids []string
-	if m.healthStarted && m.healthStop != nil {
-		close(m.healthStop)
-		m.healthStarted = false
-		m.healthStop = nil
-	}
-	for id := range m.processes {
-		ids = append(ids, id)
+	ids := make([]string, 0, len(m.defs))
+	for _, def := range m.defs {
+		ids = append(ids, def.ID)
 	}
 	m.mu.Unlock()
 
 	var wg sync.WaitGroup
 	for _, id := range ids {
+		if detached[id] {
+			fmt.Printf("[services] leaving detached service %q running\n", id)
+			continue
+		}
 		wg.Add(1)
 		go func(id string) {
 			defer wg.Done()
@@ -553,6 +596,23 @@ func (m *Manager) Shutdown() {
 		}(id)
 	}
 	wg.Wait()
+	// Adopted orphans have no saved definition, so sweep whatever the supervisor
+	// still tracks and stop the health check.
+	m.sup.Shutdown()
+}
+
+// detachedIDs reports which services run with a detached lifetime right now.
+func (m *Manager) detachedIDs() map[string]bool {
+	out := make(map[string]bool)
+	if m.sup == nil {
+		return out
+	}
+	for _, proc := range m.sup.Processes() {
+		if proc.Detached && proc.PID > 0 && service.Alive(proc.PID) {
+			out[proc.Definition.ID] = true
+		}
+	}
+	return out
 }
 
 // ForceStopAll kills any managed service process that is still alive, returning
@@ -564,169 +624,30 @@ func ForceStopAll() []string {
 }
 
 func (m *Manager) forceStopAll() []string {
-	type survivor struct {
-		name string
-		pid  int
-	}
+	procs := m.sup.Processes()
 	m.mu.Lock()
-	var alive []survivor
-	for id, proc := range m.processes {
-		if proc == nil || proc.pid <= 0 || !processAlive(proc.pid) {
+	names := make([]string, 0, len(procs))
+	for _, proc := range procs {
+		if proc.PID <= 0 || !service.Alive(proc.PID) {
 			continue
 		}
-		name := proc.def.Name
-		if name == "" {
-			name = id
+		if proc.Detached {
+			// Surviving this host is the whole point of the flag, so a survivor
+			// here is expected, not a leaked child.
+			continue
 		}
-		alive = append(alive, survivor{name: name, pid: proc.pid})
+		name := proc.Definition.Name
+		if name == "" {
+			name = proc.Definition.ID
+		}
+		names = append(names, name)
 	}
 	m.mu.Unlock()
-
-	var killed []string
-	for _, s := range alive {
-		// Escalate straight to SIGKILL: cleanup already gave this process its
-		// SIGTERM grace period before timing out.
-		pgid, err := processGroupID(s.pid)
-		if err != nil {
-			pgid = s.pid
-		}
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		deadline := time.Now().Add(2 * time.Second)
-		for time.Now().Before(deadline) && processAlive(s.pid) {
-			time.Sleep(50 * time.Millisecond)
-		}
-		m.clearProcessPIDByPID(s.pid)
-		killed = append(killed, s.name)
+	if len(names) == 0 {
+		return nil
 	}
-	return killed
-}
-
-// clearProcessPIDByPID forgets a pid after a forced kill, so status stops
-// claiming a process that is gone.
-func (m *Manager) clearProcessPIDByPID(pid int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, proc := range m.processes {
-		if proc != nil && proc.pid == pid {
-			proc.pid = 0
-			proc.cmd = nil
-			proc.status = StatusStopped
-			proc.desired = false
-		}
-	}
-}
-
-// List returns every managed service (global; no project scope).
-// List returns user services first, then the server's system services, matching
-// the order the GUI renders ("User Services" then "System Services").
-func (m *Manager) List() []ServiceStatus {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	result := m.buildStatusListLocked(append([]ServiceDefinition(nil), m.definitions...))
-	return append(result, m.buildSystemStatusListLocked()...)
-}
-
-// ListAll is an alias of List kept for callers and tests that used the old
-// cross-scope API name.
-func (m *Manager) ListAll() []ServiceStatus {
-	return m.List()
-}
-
-func (m *Manager) buildStatusListLocked(defs []ServiceDefinition) []ServiceStatus {
-	portMap := make(map[int]portforward.PortForward)
-	for _, pf := range m.getPortForwardManager().List() {
-		if pf.Target == nil || pf.ID == config.LocalMappingID(pf.LocalPort) {
-			portMap[pf.LocalPort] = pf
-		}
-	}
-
-	result := make([]ServiceStatus, 0, len(defs))
-	for _, def := range defs {
-		proc := m.processes[def.ID]
-		serviceEnv := buildServiceEnv(def)
-		logPath := m.serviceLogPath(def.ID)
-		status := StatusStopped
-		pid := 0
-		lastStartedAt := ""
-		lastExitedAt := ""
-		lastExitError := ""
-		desired := true
-		ownedForward := false
-		if proc != nil {
-			status = proc.status
-			pid = proc.pid
-			lastStartedAt = proc.lastStartedAt
-			lastExitedAt = proc.lastExitedAt
-			lastExitError = proc.lastExitError
-			desired = proc.desired
-			ownedForward = proc.ownedForward
-			if proc.logPath != "" {
-				logPath = proc.logPath
-			}
-			if pid > 0 && !processAlive(pid) {
-				pid = 0
-				if status == StatusRunning {
-					status = StatusStopped
-				}
-			}
-		}
-
-		var pfStatus *ServicePortForwardStatus
-		if def.PortForward != nil && def.PortForward.Port > 0 {
-			pfStatus = &ServicePortForwardStatus{
-				Port:       def.PortForward.Port,
-				Label:      def.PortForward.Label,
-				Provider:   normalizeProvider(def.PortForward.Provider),
-				BaseDomain: def.PortForward.BaseDomain,
-				Subdomain:  def.PortForward.Subdomain,
-			}
-			lookupPort := def.PortForward.Port
-			if proc != nil && proc.tunneledPort > 0 {
-				lookupPort = proc.tunneledPort
-			}
-			if active, ok := portMap[lookupPort]; ok {
-				pfStatus.PublicURL = active.PublicURL
-				pfStatus.Status = active.Status
-				pfStatus.Error = active.Error
-				pfStatus.Active = active.Status == portforward.StatusActive || ownedForward
-				if active.Provider != "" {
-					pfStatus.Provider = active.Provider
-				}
-				if active.Label != "" && pfStatus.Label == "" {
-					pfStatus.Label = active.Label
-				}
-			}
-		}
-
-		result = append(result, ServiceStatus{
-			ID:                    def.ID,
-			Name:                  def.Name,
-			Kind:                  ServiceKindUser,
-			Command:               def.Command,
-			WorkingDir:            def.WorkingDir,
-			ExtraEnv:              cloneStringMap(def.ExtraEnv),
-			EffectivePath:         lookupEnvValue(serviceEnv, "PATH"),
-			LogPath:               logPath,
-			Status:                status,
-			PID:                   pid,
-			LastStartedAt:         lastStartedAt,
-			LastExitedAt:          lastExitedAt,
-			LastExitError:         lastExitError,
-			DesiredRunning:        desired,
-			Enabled:               serviceEnabled(def),
-			PortForward:           pfStatus,
-			UpgradeTarget:         def.UpgradeTarget,
-			UpgradePreStopCmds:    cloneCmdList(def.UpgradePreStopCmds),
-			UpgradePostStopCmds:   cloneCmdList(def.UpgradePostStopCmds),
-			UpgradeTimeoutSeconds: cloneIntPtr(def.UpgradeTimeoutSeconds),
-			RequireAuth:           def.RequireAuth,
-			AuthUser:              def.AuthUser,
-			AuthTokenMode:         def.AuthTokenMode,
-			AuthToken:             def.AuthToken,
-			AuthTokens:            inspectAuthTokens(def),
-		})
-	}
-	return result
+	m.sup.ForceStopAll()
+	return names
 }
 
 func (m *Manager) CreateOrUpdate(def ServiceDefinition) (*ServiceStatus, error) {
@@ -738,8 +659,13 @@ func (m *Manager) CreateOrUpdateNoRestart(def ServiceDefinition) (*ServiceStatus
 }
 
 func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*ServiceStatus, error) {
-	def.WorkingDir = normalizeWorkingDir(def.WorkingDir)
-	def.ExtraEnv = normalizeExtraEnv(def.ExtraEnv)
+	def.WorkingDir = service.NormalizeWorkingDir(def.WorkingDir)
+	def.ExtraEnv = service.NormalizeEnv(def.ExtraEnv)
+	normalizedExtraPath, err := service.NormalizeExtraPath(def.ExtraPath)
+	if err != nil {
+		return nil, fmt.Errorf("extra path: %w", err)
+	}
+	def.ExtraPath = normalizedExtraPath
 	def.UpgradeTarget = strings.TrimSpace(def.UpgradeTarget)
 	def.UpgradePreStopCmds = normalizeUpgradeCmds(def.UpgradePreStopCmds)
 	def.UpgradePostStopCmds = normalizeUpgradeCmds(def.UpgradePostStopCmds)
@@ -747,6 +673,11 @@ func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*S
 		return nil, fmt.Errorf("upgrade timeout must not be negative")
 	}
 	normalizeAuthFields(&def)
+	// Mint the id before validation: service.ValidateDefinition requires one and
+	// the id is the only field a create leaves empty.
+	if strings.TrimSpace(def.ID) == "" {
+		def.ID = fmt.Sprintf("svc-%d", time.Now().UnixNano())
+	}
 	// A write addressed at a system service must not create a user service with
 	// the same id, which would shadow the registered one. Checked before
 	// validation so the error names the real problem.
@@ -762,46 +693,40 @@ func (m *Manager) createOrUpdate(def ServiceDefinition, restartChanged bool) (*S
 	var shouldRestart bool
 
 	m.mu.Lock()
-	if def.ID == "" {
-		def.ID = fmt.Sprintf("svc-%d", time.Now().UnixNano())
+	for i := range m.defs {
+		if m.defs[i].ID != def.ID {
+			continue
+		}
+		existingCopy := m.defs[i]
+		existing = &existingCopy
+		if def.UpgradeTarget == "" {
+			def.UpgradeTarget = m.defs[i].UpgradeTarget
+		}
+		if def.Enabled == nil {
+			def.Enabled = m.defs[i].Enabled
+		}
+		def.CreatedAt = m.defs[i].CreatedAt
+		def.UpdatedAt = now
+		m.defs[i] = def
+		break
+	}
+	if existing == nil {
 		def.CreatedAt = now
 		def.UpdatedAt = now
-		m.definitions = append(m.definitions, def)
-	} else {
-		for i := range m.definitions {
-			if m.definitions[i].ID != def.ID {
-				continue
-			}
-			existingCopy := m.definitions[i]
-			existing = &existingCopy
-			if def.UpgradeTarget == "" {
-				def.UpgradeTarget = m.definitions[i].UpgradeTarget
-			}
-			if def.Enabled == nil {
-				def.Enabled = m.definitions[i].Enabled
-			}
-			def.CreatedAt = m.definitions[i].CreatedAt
-			def.UpdatedAt = now
-			m.definitions[i] = def
-			break
-		}
-		if existing == nil {
-			def.CreatedAt = now
-			def.UpdatedAt = now
-			m.definitions = append(m.definitions, def)
-		}
+		m.defs = append(m.defs, def)
 	}
 	if err := m.saveDefinitionsLocked(); err != nil {
 		m.mu.Unlock()
 		return nil, err
 	}
 
-	proc := m.processes[def.ID]
-	if proc != nil && restartChanged {
-		proc.def = def
-		shouldRestart = proc.desired && (existing == nil || definitionChanged(*existing, def))
-	}
+	wasRunning := m.serviceRunningLocked(def.ID)
 	m.mu.Unlock()
+
+	m.syncSupervisor()
+	if wasRunning && restartChanged {
+		shouldRestart = existing == nil || definitionChanged(*existing, def)
+	}
 
 	if shouldRestart {
 		// Definition is already on disk. A restart failure (zombie PID, CF
@@ -828,11 +753,9 @@ func (m *Manager) Delete(id string) error {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	filtered := make([]ServiceDefinition, 0, len(m.definitions))
+	filtered := make([]ServiceDefinition, 0, len(m.defs))
 	found := false
-	for _, def := range m.definitions {
+	for _, def := range m.defs {
 		if def.ID == id {
 			found = true
 			continue
@@ -840,10 +763,17 @@ func (m *Manager) Delete(id string) error {
 		filtered = append(filtered, def)
 	}
 	if !found {
+		m.mu.Unlock()
 		return fmt.Errorf("service not found")
 	}
-	m.definitions = filtered
-	return m.saveDefinitionsLocked()
+	m.defs = filtered
+	err := m.saveDefinitionsLocked()
+	m.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	m.syncSupervisor()
+	return nil
 }
 
 func (m *Manager) Start(id string) (*ServiceStatus, error) {
@@ -932,9 +862,9 @@ func (m *Manager) Enable(id string) (*ServiceActionResponse, error) {
 	enabled := true
 	def.Enabled = &enabled
 	def.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	for i := range m.definitions {
-		if m.definitions[i].ID == id {
-			m.definitions[i] = def
+	for i := range m.defs {
+		if m.defs[i].ID == id {
+			m.defs[i] = def
 			break
 		}
 	}
@@ -943,24 +873,10 @@ func (m *Manager) Enable(id string) (*ServiceActionResponse, error) {
 		return nil, err
 	}
 
-	if !running {
-		proc := m.processes[id]
-		if proc == nil {
-			proc = &serviceProcess{
-				def:     def,
-				status:  StatusStopped,
-				logPath: m.serviceLogPath(id),
-				desired: true,
-			}
-			m.processes[id] = proc
-		} else {
-			proc.def = def
-			proc.desired = true
-		}
-	} else if proc := m.processes[id]; proc != nil {
-		proc.def = def
-	}
 	m.mu.Unlock()
+	// The supervisor re-reads definitions on its own; enabling only restores the
+	// auto-start policy, so a stopped service is not started here.
+	m.syncSupervisor()
 
 	message := msgEnableStopped
 	if running {
@@ -971,28 +887,28 @@ func (m *Manager) Enable(id string) (*ServiceActionResponse, error) {
 
 func (m *Manager) setServiceEnabled(id string, enabled bool) (running bool, err error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	def, ok := m.findDefinitionLocked(id)
 	if !ok {
+		m.mu.Unlock()
 		return false, fmt.Errorf("service not found")
 	}
 
 	running = m.serviceRunningLocked(id)
 	def.Enabled = &enabled
 	def.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	for i := range m.definitions {
-		if m.definitions[i].ID == id {
-			m.definitions[i] = def
+	for i := range m.defs {
+		if m.defs[i].ID == id {
+			m.defs[i] = def
 			break
 		}
 	}
-	if err := m.saveDefinitionsLocked(); err != nil {
+	err = m.saveDefinitionsLocked()
+	m.mu.Unlock()
+	if err != nil {
 		return running, err
 	}
-	if proc := m.processes[id]; proc != nil {
-		proc.def = def
-	}
+	m.syncSupervisor()
 	return running, nil
 }
 
@@ -1006,6 +922,158 @@ func (m *Manager) buildServiceActionResponse(id string, message string) (*Servic
 		Message: message,
 		Service: status,
 	}, nil
+}
+
+// List returns the user services followed by the server-owned system services.
+func (m *Manager) List() []ServiceStatus {
+	return m.ListAll()
+}
+
+// ListAll is an alias of List kept for callers and tests that used the old
+// cross-scope API name.
+func (m *Manager) ListAll() []ServiceStatus {
+	// The supervisor owns process state and has its own lock; snapshot it
+	// before taking m.mu so neither lock is held under the other.
+	procs := m.supervisorProcesses()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := m.buildStatusListLocked(append([]ServiceDefinition(nil), m.defs...), procs)
+	return append(result, m.buildSystemStatusListLocked()...)
+}
+
+func (m *Manager) supervisorProcesses() map[string]service.Process {
+	procs := make(map[string]service.Process)
+	if m.sup == nil {
+		return procs
+	}
+	for _, proc := range m.sup.Processes() {
+		procs[proc.Definition.ID] = proc
+	}
+	return procs
+}
+
+func (m *Manager) buildStatusListLocked(defs []ServiceDefinition, procs map[string]service.Process) []ServiceStatus {
+	portMap := make(map[int]portforward.PortForward)
+	for _, pf := range m.getPortForwardManager().List() {
+		if pf.Target == nil || pf.ID == config.LocalMappingID(pf.LocalPort) {
+			portMap[pf.LocalPort] = pf
+		}
+	}
+
+	result := make([]ServiceStatus, 0, len(defs))
+	for _, def := range defs {
+		proc, tracked := procs[def.ID]
+		hop := m.hops[def.ID]
+		logPath := m.serviceLogPath(def.ID)
+		status := StatusStopped
+		pid := 0
+		lastStartedAt := ""
+		lastExitedAt := ""
+		lastExitError := ""
+		shellEnvError := ""
+		effectivePath := ""
+		desired := true
+		ownedForward := false
+		detachedActive := false
+		adopted := false
+		if tracked {
+			status = string(proc.State)
+			pid = proc.PID
+			lastStartedAt = proc.LastStartedAt
+			lastExitedAt = proc.LastExitedAt
+			lastExitError = proc.LastExitError
+			shellEnvError = proc.ShellEnvError
+			effectivePath = proc.EffectivePath
+			desired = proc.Desired
+			adopted = proc.Adopted
+			if proc.LogPath != "" {
+				logPath = proc.LogPath
+			}
+			if pid > 0 && !service.Alive(pid) {
+				pid = 0
+				if status == StatusRunning {
+					status = StatusStopped
+				}
+			}
+			// Only a live process has a lifetime in effect; a stopped one has
+			// nothing to "apply" yet, so the GUI's pending hint must stay off.
+			detachedActive = pid > 0 && proc.Detached
+		}
+		if hop != nil {
+			ownedForward = hop.ownedForward
+		}
+		if effectivePath == "" {
+			// No start yet: show the static PATH layers. The interactive shell
+			// env is deliberately not probed here; this runs on every list poll.
+			effectivePath = service.EnvValue(buildServiceEnv(def), "PATH")
+		}
+
+		var pfStatus *ServicePortForwardStatus
+		if def.PortForward != nil && def.PortForward.Port > 0 {
+			pfStatus = &ServicePortForwardStatus{
+				Port:       def.PortForward.Port,
+				Label:      def.PortForward.Label,
+				Provider:   normalizeProvider(def.PortForward.Provider),
+				BaseDomain: def.PortForward.BaseDomain,
+				Subdomain:  def.PortForward.Subdomain,
+			}
+			lookupPort := def.PortForward.Port
+			if hop != nil && hop.tunneledPort > 0 {
+				lookupPort = hop.tunneledPort
+			}
+			if active, ok := portMap[lookupPort]; ok {
+				pfStatus.PublicURL = active.PublicURL
+				pfStatus.Status = active.Status
+				pfStatus.Error = active.Error
+				pfStatus.Active = active.Status == portforward.StatusActive || ownedForward
+				if active.Provider != "" {
+					pfStatus.Provider = active.Provider
+				}
+				if active.Label != "" && pfStatus.Label == "" {
+					pfStatus.Label = active.Label
+				}
+			}
+		}
+
+		// "Adopted" describes a live takeover: once the taken-over process is
+		// gone (stopped, or exited on its own) the badge must not linger.
+		adopted = adopted && pid > 0
+		result = append(result, ServiceStatus{
+			ID:                         def.ID,
+			Name:                       def.Name,
+			Kind:                       ServiceKindUser,
+			Command:                    def.Command,
+			WorkingDir:                 def.WorkingDir,
+			ExtraEnv:                   service.CloneStringMap(def.ExtraEnv),
+			ExtraPath:                  def.ExtraPath,
+			InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
+			ShellEnvError:              shellEnvError,
+			EffectivePath:              effectivePath,
+			LogPath:                    logPath,
+			Status:                     status,
+			PID:                        pid,
+			LastStartedAt:              lastStartedAt,
+			LastExitedAt:               lastExitedAt,
+			LastExitError:              lastExitError,
+			DesiredRunning:             desired,
+			Enabled:                    serviceEnabled(def),
+			Detached:                   def.Detached,
+			DetachedActive:             detachedActive,
+			Adopted:                    adopted,
+			PortForward:                pfStatus,
+			UpgradeTarget:              def.UpgradeTarget,
+			UpgradePreStopCmds:         cloneCmdList(def.UpgradePreStopCmds),
+			UpgradePostStopCmds:        cloneCmdList(def.UpgradePostStopCmds),
+			UpgradeTimeoutSeconds:      cloneIntPtr(def.UpgradeTimeoutSeconds),
+			RequireAuth:                def.RequireAuth,
+			AuthUser:                   def.AuthUser,
+			AuthTokenMode:              def.AuthTokenMode,
+			AuthToken:                  def.AuthToken,
+			AuthTokens:                 inspectAuthTokens(def),
+		})
+	}
+	return result
 }
 
 func (m *Manager) statusByID(id string) (*ServiceStatus, bool) {
@@ -1033,8 +1101,8 @@ func (m *Manager) selectServiceUpgradeTarget(id string, localBase string, target
 
 	m.mu.Lock()
 	idx := -1
-	for i := range m.definitions {
-		if m.definitions[i].ID == id {
+	for i := range m.defs {
+		if m.defs[i].ID == id {
 			idx = i
 			break
 		}
@@ -1044,7 +1112,7 @@ func (m *Manager) selectServiceUpgradeTarget(id string, localBase string, target
 		return nil, fmt.Errorf("service not found")
 	}
 
-	remembered = strings.TrimSpace(m.definitions[idx].UpgradeTarget)
+	remembered = strings.TrimSpace(m.defs[idx].UpgradeTarget)
 	m.mu.Unlock()
 
 	input := targetFlag
@@ -1062,8 +1130,8 @@ func (m *Manager) selectServiceUpgradeTarget(id string, localBase string, target
 	if targetFlag != "" {
 		m.mu.Lock()
 		idx := -1
-		for i := range m.definitions {
-			if m.definitions[i].ID == id {
+		for i := range m.defs {
+			if m.defs[i].ID == id {
 				idx = i
 				break
 			}
@@ -1072,7 +1140,7 @@ func (m *Manager) selectServiceUpgradeTarget(id string, localBase string, target
 			m.mu.Unlock()
 			return nil, fmt.Errorf("service not found")
 		}
-		m.definitions[idx].UpgradeTarget = targetFlag
+		m.defs[idx].UpgradeTarget = targetFlag
 		remembered = targetFlag
 		if err := m.saveDefinitionsLocked(); err != nil {
 			m.mu.Unlock()
@@ -1087,286 +1155,131 @@ func (m *Manager) selectServiceUpgradeTarget(id string, localBase string, target
 	}, nil
 }
 
+// start launches a service through the shared supervisor. force bypasses the
+// restart backoff ladder, which is what an explicit Start action wants.
 func (m *Manager) start(id string, force bool) error {
 	m.mu.Lock()
-	def, ok := m.findDefinitionLocked(id)
+	_, ok := m.findDefinitionLocked(id)
+	m.mu.Unlock()
 	if !ok {
-		m.mu.Unlock()
 		return fmt.Errorf("service not found")
 	}
-
-	proc := m.processes[id]
-	if proc == nil {
-		proc = &serviceProcess{
-			def:           def,
-			status:        StatusStopped,
-			logPath:       m.serviceLogPath(id),
-			desired:       true,
-			stopRequested: false,
-		}
-		m.processes[id] = proc
-	} else {
-		proc.def = def
-		proc.desired = true
-		proc.stopRequested = false
-		if proc.logPath == "" {
-			proc.logPath = m.serviceLogPath(id)
-		}
+	if force {
+		return m.sup.StartForce(id)
 	}
+	return m.sup.Start(id)
+}
 
-	if proc.pid > 0 && processAlive(proc.pid) {
-		proc.status = StatusRunning
-		m.mu.Unlock()
-		return nil
-	}
-
-	if !force && !proc.nextRestartAt.IsZero() && time.Now().Before(proc.nextRestartAt) {
-		proc.status = StatusError
-		m.mu.Unlock()
-		return nil
-	}
-
-	proc.status = StatusStarting
-	proc.lastExitError = ""
-	logPath := proc.logPath
-	workingDir := def.WorkingDir
-	m.mu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-		m.recordStartFailure(id, err.Error())
-		return err
-	}
-
-	if err := ensureServiceWorkingDir(workingDir); err != nil {
-		m.recordStartFailure(id, err.Error())
-		return err
-	}
-
-	if err := killConfiguredPortOwner(def.PortForward); err != nil {
-		m.recordStartFailure(id, err.Error())
-		return err
-	}
-
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		m.recordStartFailure(id, err.Error())
-		return err
-	}
-
-	startMarker := fmt.Sprintf("\n[%s] starting service %s\n", time.Now().Format(time.RFC3339), def.Name)
-	_, _ = logFile.WriteString(startMarker)
-
-	serviceEnv := buildServiceEnv(def)
-	shellCommand := def.Command
-	if pathVal := lookupEnvValue(serviceEnv, "PATH"); pathVal != "" {
-		// Keep login-shell behavior, but restore the resolved PATH after
-		// profile scripts run. Verified locally:
-		//   bash -c  'echo $PATH'  -> keeps the injected tool_resolve PATH entries
-		//   bash -lc 'echo $PATH'  -> login startup files reset PATH and drop them
-		// So we prepend an explicit export for PATH before running the command.
-		shellCommand = fmt.Sprintf("export PATH=%s; %s", shellQuote(pathVal), def.Command)
-	}
-	cmd := exec.Command("bash", "-lc", shellCommand)
-	cmd.Dir = workingDir
-	// Match terminal/tool execution behavior so managed services can find
-	// binaries installed in tool_resolve's extra PATH entries.
-	cmd.Env = serviceEnv
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	if err := cmd.Start(); err != nil {
-		_, _ = logFile.WriteString(fmt.Sprintf("[%s] failed to start: %v\n", time.Now().Format(time.RFC3339), err))
-		logFile.Close()
-		m.recordStartFailure(id, err.Error())
-		return err
-	}
-
-	pid := cmd.Process.Pid
-	startedAt := time.Now()
-
+// prepareStart is the supervisor's Prepare hook: free the port the service is
+// configured to publish before the child binds it.
+func (m *Manager) prepareStart(def service.Definition) error {
 	m.mu.Lock()
-	proc = m.processes[id]
-	if proc == nil {
-		proc = &serviceProcess{}
-		m.processes[id] = proc
-	}
-	proc.def = def
-	proc.cmd = cmd
-	proc.pid = pid
-	proc.status = StatusRunning
-	proc.lastStartedAt = startedAt.UTC().Format(time.RFC3339)
-	proc.desired = true
-	proc.stopRequested = false
-	proc.logPath = logPath
-	proc.runStartedAt = startedAt
-	proc.nextRestartAt = time.Time{}
-	proc.lastExitError = ""
+	saved, ok := m.findDefinitionLocked(def.ID)
 	m.mu.Unlock()
-
-	// Persist the pid so a later instance can reclaim this process if it is
-	// orphaned by a crash or an interrupted shutdown.
-	pgid, pgidErr := processGroupID(pid)
-	if pgidErr != nil {
-		pgid = pid
+	if !ok {
+		return nil
 	}
-	m.recordRuntimeProcess(id, pid, pgid, def.Command)
+	return killConfiguredPortOwner(saved.PortForward)
+}
 
-	if err := m.ensurePortForward(id, def); err != nil {
-		_, _ = logFile.WriteString(fmt.Sprintf("[%s] failed to ensure port forwarding: %v\n", time.Now().Format(time.RFC3339), err))
-		m.setRuntimeError(id, err.Error())
+// started is the supervisor's Started hook. A forwarding failure is recorded on
+// the status instead of failing the start, matching the pre-extraction
+// behavior: the process is already healthy and killing it would be worse.
+func (m *Manager) started(def service.Definition, _ int, logFile *os.File) error {
+	m.mu.Lock()
+	saved, ok := m.findDefinitionLocked(def.ID)
+	m.mu.Unlock()
+	if !ok {
+		return nil
 	}
-
-	go m.waitForExit(id, cmd, logFile)
+	if err := m.ensurePortForward(saved.ID, saved); err != nil {
+		if logFile != nil {
+			_, _ = logFile.WriteString(fmt.Sprintf("[%s] failed to ensure port forwarding: %v\n", time.Now().Format(time.RFC3339), err))
+		}
+		m.setRuntimeError(saved.ID, err.Error())
+	}
 	return nil
 }
 
-func (m *Manager) waitForExit(id string, cmd *exec.Cmd, logFile *os.File) {
-	err := cmd.Wait()
-	exitAt := time.Now()
-	exitTime := exitAt.UTC().Format(time.RFC3339)
-	if err != nil {
-		_, _ = logFile.WriteString(fmt.Sprintf("[%s] service exited with error: %v\n", time.Now().Format(time.RFC3339), err))
-	} else {
-		_, _ = logFile.WriteString(fmt.Sprintf("[%s] service exited\n", time.Now().Format(time.RFC3339)))
-	}
-	_ = logFile.Close()
-
+// buildEnv is the supervisor's Env hook. The saved definition is re-read under
+// the lock so a concurrent save cannot make the login-shell probe disagree with
+// the command that just started.
+func (m *Manager) buildEnv(def service.Definition) ([]string, error) {
 	m.mu.Lock()
-	proc := m.processes[id]
-	if proc != nil && proc.cmd == cmd {
-		runDuration := time.Duration(0)
-		if !proc.runStartedAt.IsZero() {
-			runDuration = exitAt.Sub(proc.runStartedAt)
-		}
-		proc.pid = 0
-		proc.cmd = nil
-		proc.runStartedAt = time.Time{}
-		proc.lastExitedAt = exitTime
-		if proc.stopRequested {
-			proc.status = StatusStopped
-			proc.lastExitError = ""
-			proc.consecutiveFailures = 0
-			proc.nextRestartAt = time.Time{}
-		} else {
-			if runDuration >= stableRunResetWindow {
-				proc.consecutiveFailures = 0
-			}
-			proc.consecutiveFailures++
-			proc.nextRestartAt = computeBackoffTime(proc.consecutiveFailures)
-			if err != nil {
-				proc.lastExitError = err.Error()
-			} else {
-				proc.lastExitError = fmt.Sprintf("service exited unexpectedly; retrying in %s", proc.nextRestartAt.Sub(exitAt).Round(time.Second))
-			}
-			proc.status = StatusError
-		}
-		proc.stopRequested = false
-	}
+	saved, ok := m.findDefinitionLocked(def.ID)
 	m.mu.Unlock()
+	if ok {
+		def = toServiceDefinition(saved)
+	}
+	env, shellErr := buildServiceEnvForStart(fromServiceDefinition(def))
+	if shellErr != "" {
+		return env, errors.New(shellErr)
+	}
+	return env, nil
 }
 
-func (m *Manager) stop(id string, removeForward bool, wait bool) error {
+// toServiceDefinition converts a saved definition into the shared supervisor's
+// type. Host-only fields (port forwarding, upgrades, auth) stay in ai-critic.
+func toServiceDefinition(def ServiceDefinition) service.Definition {
+	return service.Definition{
+		ID:                         def.ID,
+		Name:                       def.Name,
+		Command:                    def.Command,
+		WorkingDir:                 def.WorkingDir,
+		ExtraEnv:                   def.ExtraEnv,
+		ExtraPath:                  def.ExtraPath,
+		InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
+		Enabled:                    def.Enabled,
+		Detached:                   def.Detached,
+	}
+}
+
+// fromServiceDefinition is the inverse of toServiceDefinition. It is only used
+// where a hook receives a supervisor definition and needs the saved record.
+func fromServiceDefinition(def service.Definition) ServiceDefinition {
+	return ServiceDefinition{
+		ID:                         def.ID,
+		Name:                       def.Name,
+		Command:                    def.Command,
+		WorkingDir:                 def.WorkingDir,
+		ExtraEnv:                   def.ExtraEnv,
+		ExtraPath:                  def.ExtraPath,
+		InheritInteractiveShellEnv: def.InheritInteractiveShellEnv,
+		Enabled:                    def.Enabled,
+		Detached:                   def.Detached,
+	}
+}
+
+// stop takes a service down. removeForward tears down the auth proxy and the
+// port forward the service owns.
+func (m *Manager) stop(id string, removeForward bool, _ bool) error {
 	m.mu.Lock()
-	proc, ok := m.processes[id]
-	if !ok {
-		_, exists := m.findDefinitionLocked(id)
-		m.mu.Unlock()
-		if !exists {
+	_, exists := m.findDefinitionLocked(id)
+	if !exists {
+		if _, tracked := m.sup.Process(id); !tracked {
+			m.mu.Unlock()
 			return fmt.Errorf("service not found")
 		}
-		return nil
 	}
-
-	proc.desired = false
-	proc.stopRequested = true
-	proc.status = StatusStopped
-	pid := proc.pid
-	ownedForward := proc.ownedForward
-	port := proc.tunneledPort
-	if port == 0 && proc.def.PortForward != nil {
-		port = proc.def.PortForward.Port
-	}
-	authProxy := proc.authProxy
+	hop := m.hops[id]
 	if removeForward {
-		proc.authProxy = nil
-		proc.tunneledPort = 0
-	}
-	if pid == 0 {
-		proc.cmd = nil
-		if removeForward {
-			proc.ownedForward = false
-		}
-		proc.consecutiveFailures = 0
-		proc.nextRestartAt = time.Time{}
-		proc.runStartedAt = time.Time{}
+		delete(m.hops, id)
 	}
 	m.mu.Unlock()
 
-	if removeForward {
-		if authProxy != nil {
-			_ = authProxy.Close()
+	// Forward teardown stays ahead of the signal so the local tunnel closes
+	// while the process it published is still up.
+	if removeForward && hop != nil {
+		if hop.authProxy != nil {
+			_ = hop.authProxy.Close()
 		}
-		if ownedForward && port > 0 {
-			_ = m.getPortForwardManager().RemoveSelector(config.LocalMappingID(port))
-			m.mu.Lock()
-			if current := m.processes[id]; current != nil {
-				current.ownedForward = false
-			}
-			m.mu.Unlock()
+		if hop.ownedForward && hop.tunneledPort > 0 {
+			_ = m.getPortForwardManager().RemoveSelector(config.LocalMappingID(hop.tunneledPort))
 		}
 	}
-
-	if pid == 0 {
-		return nil
-	}
-
-	// Zombies and already-reaped PIDs still pass kill(pid,0); treat them as stopped.
-	if !processAlive(pid) {
-		m.clearProcessPID(id, pid)
-		return nil
-	}
-
-	if err := stopProcessGroup(pid); err != nil {
-		// If the process became a zombie during signaling, treat stop as success.
-		if !processAlive(pid) {
-			m.clearProcessPID(id, pid)
-			return nil
-		}
-		return err
-	}
-
-	if wait {
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			if !processAlive(pid) {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-	m.clearProcessPID(id, pid)
-	return nil
+	return m.sup.Stop(id)
 }
 
-func (m *Manager) clearProcessPID(id string, pid int) {
-	m.mu.Lock()
-	if current := m.processes[id]; current != nil && current.pid == pid {
-		current.pid = 0
-		current.cmd = nil
-		current.runStartedAt = time.Time{}
-	}
-	m.mu.Unlock()
-	// The process is gone, so its runtime record has nothing left to reclaim.
-	m.forgetRuntimeProcess(id)
-}
-
-// RepublishForward tears down one service's port forward and re-establishes it.
-//
-// It exists for the Cloudflare Proxy system service: a forward can keep
-// claiming "active" while its dial pool is gone, and ensurePortForward reuses
-// an active entry, so the entry must be dropped first. The service's own
-// process is left alone.
 // CloudflareOwnedForwardHosts returns the hostnames user services intend to
 // publish via cloudflare_owned, from their saved definitions. It takes the
 // manager lock, so it must not be called while that lock is held.
@@ -1378,7 +1291,7 @@ func (m *Manager) CloudflareOwnedForwardHosts() []SystemHost {
 
 func (m *Manager) cloudflareOwnedHostsLocked() []SystemHost {
 	out := make([]SystemHost, 0)
-	for _, def := range m.definitions {
+	for _, def := range m.defs {
 		if def.PortForward == nil {
 			continue
 		}
@@ -1394,6 +1307,12 @@ func (m *Manager) cloudflareOwnedHostsLocked() []SystemHost {
 	return out
 }
 
+// RepublishForward tears down one service's port forward and re-establishes it.
+//
+// It exists for the Cloudflare Proxy system service: a forward can keep
+// claiming "active" while its dial pool is gone, and ensurePortForward reuses
+// an active entry, so the entry must be dropped first. The service's own
+// process is left alone.
 func (m *Manager) RepublishForward(id string) error {
 	m.mu.Lock()
 	def, ok := m.findDefinitionLocked(id)
@@ -1406,8 +1325,8 @@ func (m *Manager) RepublishForward(id string) error {
 		return fmt.Errorf("service %q has no port forwarding", id)
 	}
 	tunnelPort := def.PortForward.Port
-	if proc := m.processes[id]; proc != nil && proc.tunneledPort > 0 {
-		tunnelPort = proc.tunneledPort
+	if hop := m.hops[id]; hop != nil && hop.tunneledPort > 0 {
+		tunnelPort = hop.tunneledPort
 	}
 	desiredDef := def
 	m.mu.Unlock()
@@ -1517,21 +1436,21 @@ func (m *Manager) reuseAuthHop(id string, def ServiceDefinition) (*authproxy.Ser
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	proc := m.processes[id]
-	if proc == nil || proc.authProxy == nil || !proc.authProxy.Alive() {
+	hop := m.hops[id]
+	if hop == nil || hop.authProxy == nil || !hop.authProxy.Alive() {
 		return nil, nil
 	}
-	if !proc.authProxy.Matches(def.PortForward.Port, def.AuthUser, def.AuthTokenMode, def.AuthToken) {
+	if !hop.authProxy.Matches(def.PortForward.Port, def.AuthUser, def.AuthTokenMode, def.AuthToken) {
 		return nil, nil
 	}
-	return proc.authProxy, nil
+	return hop.authProxy, nil
 }
 
 func (m *Manager) currentAuthProxy(id string) *authproxy.Server {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if proc := m.processes[id]; proc != nil {
-		return proc.authProxy
+	if hop := m.hops[id]; hop != nil {
+		return hop.authProxy
 	}
 	return nil
 }
@@ -1539,36 +1458,37 @@ func (m *Manager) currentAuthProxy(id string) *authproxy.Server {
 func (m *Manager) rememberAuthHop(id string, proxy *authproxy.Server, tunnelPort int, owned bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	proc := m.processes[id]
-	if proc == nil {
-		if proxy != nil {
-			_ = proxy.Close()
-		}
-		return
+	hop := m.hops[id]
+	if hop == nil {
+		// A forward can be published before the process entry exists (republish,
+		// or a service whose child already exited); keep tracking it so it can be
+		// torn down again.
+		hop = &forwardHop{}
+		m.hops[id] = hop
 	}
-	proc.authProxy = proxy
+	hop.authProxy = proxy
 	if proxy != nil {
-		proc.tunneledPort = tunnelPort
+		hop.tunneledPort = tunnelPort
 	} else {
-		proc.tunneledPort = 0
+		hop.tunneledPort = 0
 	}
-	proc.ownedForward = owned
+	hop.ownedForward = owned
 }
 
 func (m *Manager) teardownAuthHop(id string) {
 	m.mu.Lock()
-	proc := m.processes[id]
-	if proc == nil || proc.authProxy == nil {
+	hop := m.hops[id]
+	if hop == nil || hop.authProxy == nil {
 		m.mu.Unlock()
 		return
 	}
-	proxy := proc.authProxy
-	port := proc.tunneledPort
-	owned := proc.ownedForward
-	proc.authProxy = nil
-	proc.tunneledPort = 0
+	proxy := hop.authProxy
+	port := hop.tunneledPort
+	owned := hop.ownedForward
+	hop.authProxy = nil
+	hop.tunneledPort = 0
 	if owned {
-		proc.ownedForward = false
+		hop.ownedForward = false
 	}
 	m.mu.Unlock()
 
@@ -1585,95 +1505,21 @@ func (m *Manager) getPortForwardManager() *portforward.Manager {
 	return portforward.GetDefaultManager()
 }
 
-func (m *Manager) reconcileProcesses() {
-	var restartIDs []string
-
-	m.mu.Lock()
-	now := time.Now()
-	for id, proc := range m.processes {
-		if proc == nil || !proc.desired {
-			continue
-		}
-		def, ok := m.findDefinitionLocked(id)
-		if !ok || !serviceEnabled(def) {
-			continue
-		}
-		if proc.pid > 0 && processAlive(proc.pid) {
-			continue
-		}
-		if proc.status == StatusStarting {
-			continue
-		}
-		if !proc.nextRestartAt.IsZero() && now.Before(proc.nextRestartAt) {
-			continue
-		}
-		restartIDs = append(restartIDs, id)
-	}
-	m.mu.Unlock()
-
-	for _, id := range restartIDs {
-		if err := m.start(id, false); err != nil {
-			fmt.Printf("[services] healthcheck restart failed for %s: %v\n", id, err)
-		}
-	}
-}
-
 func (m *Manager) setError(id string, err error) {
-	m.recordStartFailure(id, err.Error())
+	m.setRuntimeError(id, err.Error())
 }
 
+// setRuntimeError records a host-side failure on the service status. The
+// supervisor owns the backoff ladder and the process fields.
 func (m *Manager) setRuntimeError(id string, msg string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if proc := m.processes[id]; proc != nil {
-		proc.pid = 0
-		proc.cmd = nil
-		proc.runStartedAt = time.Time{}
-		proc.status = StatusError
-		proc.lastExitError = msg
-		proc.lastExitedAt = time.Now().UTC().Format(time.RFC3339)
+	if m.sup == nil {
+		return
 	}
-}
-
-func (m *Manager) recordStartFailure(id string, msg string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if proc := m.processes[id]; proc != nil {
-		now := time.Now()
-		proc.pid = 0
-		proc.cmd = nil
-		proc.runStartedAt = time.Time{}
-		proc.status = StatusError
-		proc.lastExitError = msg
-		proc.lastExitedAt = now.UTC().Format(time.RFC3339)
-		proc.consecutiveFailures++
-		proc.nextRestartAt = now.Add(computeBackoffDelay(proc.consecutiveFailures))
-	}
-}
-
-func computeBackoffTime(failures int) time.Time {
-	return time.Now().Add(computeBackoffDelay(failures))
-}
-
-func computeBackoffDelay(failures int) time.Duration {
-	if failures <= 0 {
-		return 0
-	}
-	delay := restartBackoffBase
-	for i := 1; i < failures; i++ {
-		if delay >= restartBackoffMax/2 {
-			return restartBackoffMax
-		}
-		delay *= 2
-	}
-	if delay > restartBackoffMax {
-		return restartBackoffMax
-	}
-	return delay
+	m.sup.SetRuntimeError(id, msg)
 }
 
 func (m *Manager) findDefinitionLocked(id string) (ServiceDefinition, bool) {
-	for _, def := range m.definitions {
+	for _, def := range m.defs {
 		if def.ID == id {
 			return def, true
 		}
@@ -1688,12 +1534,15 @@ func serviceEnabled(def ServiceDefinition) bool {
 	return *def.Enabled
 }
 
+// serviceRunningLocked reports whether id currently has a live child. The
+// supervisor keeps its own lock, so the process snapshot is read without m.mu
+// (callers hold it, and taking another lock under it would invert lock order).
 func (m *Manager) serviceRunningLocked(id string) bool {
-	proc := m.processes[id]
-	if proc == nil {
+	if m.sup == nil {
 		return false
 	}
-	return proc.pid > 0 && processAlive(proc.pid)
+	proc, ok := m.sup.Process(id)
+	return ok && proc.PID > 0
 }
 
 func normalizeProvider(provider string) string {
@@ -1704,16 +1553,14 @@ func normalizeProvider(provider string) string {
 }
 
 func validateDefinition(def ServiceDefinition) error {
-	if strings.TrimSpace(def.Name) == "" {
-		return fmt.Errorf("service name is required")
+	shared := toServiceDefinition(def)
+	if shared.ID == "" {
+		// dot-pkgs validates the id too; the host mints one after validation,
+		// so stand in for it here and keep this function's contract unchanged.
+		shared.ID = pendingServiceID
 	}
-	if strings.TrimSpace(def.Command) == "" {
-		return fmt.Errorf("service command is required")
-	}
-	for key := range def.ExtraEnv {
-		if !isValidEnvKey(key) {
-			return fmt.Errorf("invalid environment variable name: %s", key)
-		}
+	if err := service.ValidateDefinition(shared); err != nil {
+		return err
 	}
 	if def.PortForward != nil {
 		if def.PortForward.Port <= 0 || def.PortForward.Port > 65535 {
@@ -1773,11 +1620,21 @@ func inspectAuthTokens(def ServiceDefinition) []string {
 	return tokens
 }
 
+// definitionChanged reports whether an edit needs a restart to take effect.
+// Start-time flags are deliberately absent: Enabled and Detached only affect
+// what happens on the next start (or on quit), so saving them must never bounce
+// a running process behind the user's back.
 func definitionChanged(oldDef ServiceDefinition, newDef ServiceDefinition) bool {
 	if oldDef.Name != newDef.Name || oldDef.Command != newDef.Command || oldDef.WorkingDir != newDef.WorkingDir {
 		return true
 	}
-	if !stringMapEqual(oldDef.ExtraEnv, newDef.ExtraEnv) {
+	if !service.StringMapEqual(oldDef.ExtraEnv, newDef.ExtraEnv) {
+		return true
+	}
+	if oldDef.ExtraPath != newDef.ExtraPath {
+		return true
+	}
+	if oldDef.InheritInteractiveShellEnv != newDef.InheritInteractiveShellEnv {
 		return true
 	}
 	if oldDef.RequireAuth != newDef.RequireAuth ||
@@ -1825,7 +1682,7 @@ func killConfiguredPortOwner(pf *ServicePortForward) error {
 	if pf == nil || pf.Port <= 0 {
 		return nil
 	}
-	pids, err := findListeningPIDs(pf.Port)
+	pids, err := service.ListeningPIDs(pf.Port)
 	if err != nil {
 		return err
 	}
@@ -1833,259 +1690,65 @@ func killConfiguredPortOwner(pf *ServicePortForward) error {
 		if pid == os.Getpid() {
 			return fmt.Errorf("refusing to kill current server process on port %d", pf.Port)
 		}
-		if err := stopProcessGroup(pid); err != nil {
+		if err := service.StopProcessGroup(pid); err != nil {
 			return fmt.Errorf("failed to free port %d: %w", pf.Port, err)
 		}
 	}
 	return nil
 }
 
-func findListeningPIDs(port int) ([]int, error) {
-	cmd := exec.Command("lsof", "-tiTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-n", "-P")
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) == 0 {
-			return nil, nil
-		}
-		if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
-			return nil, fmt.Errorf("lsof not installed: required for service port management")
-		}
-		return nil, err
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var pids []int
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		pid, convErr := strconv.Atoi(line)
-		if convErr == nil && pid > 0 {
-			pids = append(pids, pid)
-		}
-	}
-	return pids, nil
-}
-
-func processGroupID(pid int) (int, error) {
-	pgid, err := syscall.Getpgid(pid)
-	if err != nil {
-		return 0, err
-	}
-	return pgid, nil
-}
-
-func stopProcessGroup(pid int) error {
-	if pid <= 0 {
-		return nil
-	}
-
-	pgid, err := processGroupID(pid)
-	if err != nil {
-		// Fall back to signaling the process directly when PGID lookup fails.
-		return signalProcessUntilExit(pid, pid, 3*time.Second, 2*time.Second)
-	}
-	return signalProcessUntilExit(pid, pgid, 3*time.Second, 2*time.Second)
-}
-
-func signalProcessUntilExit(pid, signalTarget int, termTimeout, killTimeout time.Duration) error {
-	_ = syscall.Kill(-signalTarget, syscall.SIGTERM)
-	deadline := time.Now().Add(termTimeout)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	_ = syscall.Kill(-signalTarget, syscall.SIGKILL)
-	if signalTarget != pid {
-		_ = syscall.Kill(pid, syscall.SIGKILL)
-	}
-	deadline = time.Now().Add(killTimeout)
-	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("process %d did not exit", pid)
-}
-
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	// Zombie PIDs still succeed kill(pid, 0) on Linux until the parent reaps
-	// them. Treating them as alive makes stop/restart fail with
-	// "process N did not exit" (e.g. service domain save on /service).
-	if processZombie(pid) {
-		return false
-	}
-	return syscall.Kill(pid, 0) == nil
-}
-
-// processZombie reports whether pid exists as a zombie (Linux /proc).
-// Non-Linux or unreadable /proc yields false (caller falls back to kill(0)).
-func processZombie(pid int) bool {
-	state, ok := processState(pid)
-	return ok && state == 'Z'
-}
-
-// processState reads the state char from /proc/<pid>/stat ("R","S","Z",…).
-func processState(pid int) (state byte, ok bool) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return 0, false
-	}
-	return parseProcStatState(data)
-}
-
-// parseProcStatState extracts the state field from a /proc/<pid>/stat line.
-// Format: pid (comm) state ... — comm may contain spaces and parentheses.
-func parseProcStatState(stat []byte) (state byte, ok bool) {
-	s := string(stat)
-	i := strings.LastIndex(s, ") ")
-	if i < 0 || i+2 >= len(s) {
-		return 0, false
-	}
-	return s[i+2], true
-}
-
 func (m *Manager) serviceLogPath(id string) string {
-	return filepath.Join(m.servicesDataDir(), "services", id+".log")
-}
-
-func serviceLogPath(id string) string {
-	// Package default path (default manager / production).
-	return filepath.Join(config.DataDir, "services", id+".log")
+	return service.LogPath(m.servicesLogDir(), id)
 }
 
 // EnsureServiceWorkingDir creates workingDir (including parents) when non-empty.
 // Used by start and L2 doctests that isolate the mkdir contract.
 func EnsureServiceWorkingDir(workingDir string) error {
-	return ensureServiceWorkingDir(workingDir)
+	return service.EnsureWorkingDir(workingDir)
 }
 
-func ensureServiceWorkingDir(workingDir string) error {
-	workingDir = strings.TrimSpace(workingDir)
-	if workingDir == "" {
-		return nil
-	}
-	if err := os.MkdirAll(workingDir, 0755); err != nil {
-		return fmt.Errorf("create working directory %s: %w", workingDir, err)
-	}
-	return nil
+// serviceEnvBase is the host's starting environment for managed children: the
+// server's own env plus the extra PATH dirs tool resolution adds.
+func serviceEnvBase() []string {
+	return tools.AppendExtraPaths(os.Environ())
 }
 
-func normalizeWorkingDir(workingDir string) string {
-	workingDir = strings.TrimSpace(workingDir)
-	if workingDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			workingDir = strings.TrimSpace(home)
-		}
-		if workingDir == "" {
-			if cwd, err := os.Getwd(); err == nil {
-				workingDir = cwd
-			}
-		}
-	}
-	if workingDir == "" {
-		return ""
-	}
-	abs, err := filepath.Abs(workingDir)
-	if err != nil {
-		return workingDir
-	}
-	return abs
-}
-
-func normalizeExtraEnv(extraEnv map[string]string) map[string]string {
-	if len(extraEnv) == 0 {
-		return nil
-	}
-	normalized := make(map[string]string, len(extraEnv))
-	for key, value := range extraEnv {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		normalized[key] = value
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-	return normalized
-}
-
+// buildServiceEnv builds the static PATH/env layers for a service definition:
+// process env, Extra PATH prepended, Extra Env overrides, lookup-path fill-in.
+// It never probes an interactive shell, so it stays cheap enough for status
+// polling (buildStatusListLocked runs on every list request).
 func buildServiceEnv(def ServiceDefinition) []string {
-	return procenv.BuildManagedEnv(def.ExtraEnv)
+	env, _ := service.BuildEnv(service.EnvOptions{
+		Base:      serviceEnvBase(),
+		Extra:     def.ExtraEnv,
+		ExtraPath: def.ExtraPath,
+	})
+	return env
 }
 
-func lookupEnvValue(env []string, key string) string {
-	prefix := key + "="
-	for _, item := range env {
-		if strings.HasPrefix(item, prefix) {
-			return strings.TrimPrefix(item, prefix)
-		}
-	}
-	return ""
+// resolveStartEnv is the service.BuildEnv entry point for real starts. It is a
+// variable so tests can exercise the interactive-shell failure path without
+// spawning a login shell.
+var resolveStartEnv = func(opts service.EnvOptions) ([]string, error) {
+	opts.Base = serviceEnvBase()
+	return service.BuildEnv(opts)
 }
 
-func isValidEnvKey(key string) bool {
-	if key == "" {
-		return false
+// buildServiceEnvForStart builds the env a real service start (or upgrade step)
+// uses. Unlike buildServiceEnv it honors InheritInteractiveShellEnv, which runs
+// `$SHELL -lic 'env -0'` once per start. A probe failure is returned as a
+// human-readable message while the env stays usable: every other layer applies
+// and bash -lc still reads login profiles on its own.
+func buildServiceEnvForStart(def ServiceDefinition) ([]string, string) {
+	env, err := resolveStartEnv(service.EnvOptions{
+		Extra:           def.ExtraEnv,
+		ExtraPath:       def.ExtraPath,
+		InheritShellEnv: def.InheritInteractiveShellEnv,
+	})
+	if err != nil {
+		return env, err.Error()
 	}
-	for i, ch := range key {
-		if i == 0 {
-			if ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') {
-				return false
-			}
-			continue
-		}
-		if ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch <= '9') {
-			return false
-		}
-	}
-	return true
-}
-
-func stringMapEqual(a, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for key, value := range a {
-		if b[key] != value {
-			return false
-		}
-	}
-	return true
-}
-
-func cloneStringMap(src map[string]string) map[string]string {
-	if len(src) == 0 {
-		return nil
-	}
-	dst := make(map[string]string, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
-}
-
-func shellQuote(s string) string {
-	safe := true
-	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '/' || c == '.' || c == '-' || c == '_') {
-			safe = false
-			break
-		}
-	}
-	if safe && s != "" {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return env, ""
 }
 
 func normalizeUpgradeLocalBase(localBase string) string {

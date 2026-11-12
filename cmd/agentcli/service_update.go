@@ -2,6 +2,7 @@ package agentcli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/xhd2015/ai-critic/client"
@@ -57,6 +58,11 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		envSet               []string
 		envUnset             []string
 		clearEnv             bool
+		extraPath            string
+		inheritShellEnv      bool
+		noInheritShellEnv    bool
+		detached             bool
+		noDetached           bool
 		port                 int
 		portLabel            string
 		portProvider         string
@@ -82,6 +88,11 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		StringSlice("--env", &envSet).
 		StringSlice("--unset-env", &envUnset).
 		Bool("--clear-env", &clearEnv).
+		String("--extra-path", &extraPath).
+		Bool("--inherit-shell-env", &inheritShellEnv).
+		Bool("--no-inherit-shell-env", &noInheritShellEnv).
+		Bool("--detached", &detached).
+		Bool("--no-detached", &noDetached).
 		Int("--port", &port).
 		String("--port-label", &portLabel).
 		String("--port-provider", &portProvider).
@@ -196,6 +207,34 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		updateCount++
 	}
 
+	if inheritShellEnv && noInheritShellEnv {
+		return fmt.Errorf("--inherit-shell-env cannot be combined with --no-inherit-shell-env")
+	}
+	if specified["--extra-path"] {
+		def.ExtraPath = strings.TrimSpace(extraPath)
+		updateCount++
+	}
+	if inheritShellEnv {
+		def.InheritInteractiveShellEnv = true
+		updateCount++
+	}
+	if noInheritShellEnv {
+		def.InheritInteractiveShellEnv = false
+		updateCount++
+	}
+
+	if detached && noDetached {
+		return fmt.Errorf("--detached cannot be combined with --no-detached")
+	}
+	if detached {
+		def.Detached = true
+		updateCount++
+	}
+	if noDetached {
+		def.Detached = false
+		updateCount++
+	}
+
 	portFieldsSpecified := specified["--port"] ||
 		specified["--port-label"] ||
 		specified["--port-provider"] ||
@@ -276,12 +315,21 @@ func runServiceUpdate(resolve func() (*client.Client, error), args []string) err
 		return fmt.Errorf("service update requires at least one update flag")
 	}
 
+	// Lifetime is a start-time setting: saving it never bounces a running
+	// process, so tell the user which command applies it. The exit code stays 0
+	// because the save itself succeeded.
+	lifetimePending := service.Status == "running" && service.DetachedActive != def.Detached
+
 	updated, err := cli.SaveService(def, false)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Updated service %s (%s)\n", updated.ID, displayOrDash(updated.Name))
 	fmt.Println("Saved definition. Restart the service for changed runtime values to take effect.")
+	if lifetimePending {
+		fmt.Fprintf(os.Stderr, "warning: %s is still running with its current lifetime; run `remote-agent service restart %s` to apply detached=%t\n",
+			updated.ID, updated.ID, def.Detached)
+	}
 	return nil
 }
 
@@ -290,20 +338,23 @@ func serviceDefinitionFromStatus(service *client.ServiceStatus) client.ServiceDe
 		return client.ServiceDefinition{}
 	}
 	return client.ServiceDefinition{
-		ID:                    service.ID,
-		Name:                  service.Name,
-		Command:               service.Command,
-		WorkingDir:            service.WorkingDir,
-		ExtraEnv:              cloneServiceEnv(service.ExtraEnv),
-		PortForward:           servicePortForwardFromStatus(service.PortForward),
-		UpgradeTarget:         service.UpgradeTarget,
-		UpgradePreStopCmds:    append([]string(nil), service.UpgradePreStopCmds...),
-		UpgradePostStopCmds:   append([]string(nil), service.UpgradePostStopCmds...),
-		UpgradeTimeoutSeconds: cloneServiceIntPtr(service.UpgradeTimeoutSeconds),
-		RequireAuth:           service.RequireAuth,
-		AuthUser:              service.AuthUser,
-		AuthTokenMode:         service.AuthTokenMode,
-		AuthToken:             service.AuthToken,
+		ID:                         service.ID,
+		Name:                       service.Name,
+		Command:                    service.Command,
+		WorkingDir:                 service.WorkingDir,
+		ExtraEnv:                   cloneServiceEnv(service.ExtraEnv),
+		ExtraPath:                  service.ExtraPath,
+		InheritInteractiveShellEnv: service.InheritInteractiveShellEnv,
+		Detached:                   service.Detached,
+		PortForward:                servicePortForwardFromStatus(service.PortForward),
+		UpgradeTarget:              service.UpgradeTarget,
+		UpgradePreStopCmds:         append([]string(nil), service.UpgradePreStopCmds...),
+		UpgradePostStopCmds:        append([]string(nil), service.UpgradePostStopCmds...),
+		UpgradeTimeoutSeconds:      cloneServiceIntPtr(service.UpgradeTimeoutSeconds),
+		RequireAuth:                service.RequireAuth,
+		AuthUser:                   service.AuthUser,
+		AuthTokenMode:              service.AuthTokenMode,
+		AuthToken:                  service.AuthToken,
 	}
 }
 
@@ -364,6 +415,7 @@ func serviceUpdateSpecifiedFlags(args []string) map[string]bool {
 		"--upgrade-timeout":       true,
 		"--env":                   true,
 		"--unset-env":             true,
+		"--extra-path":            true,
 		"--port":                  true,
 		"--port-label":            true,
 		"--port-provider":         true,
@@ -374,6 +426,10 @@ func serviceUpdateSpecifiedFlags(args []string) map[string]bool {
 	}
 	boolFlags := map[string]bool{
 		"--clear-env":                    true,
+		"--inherit-shell-env":            true,
+		"--no-inherit-shell-env":         true,
+		"--detached":                     true,
+		"--no-detached":                  true,
 		"--clear-port-forward":           true,
 		"--require-auth":                 true,
 		"--clear-auth":                   true,

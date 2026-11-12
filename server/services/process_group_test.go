@@ -1,120 +1,67 @@
 package services
 
 import (
-	"os"
+	"fmt"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
-	"testing"
 	"time"
+
+	"testing"
+
+	"github.com/xhd2015/dot-pkgs/go-pkgs/service"
 )
 
-func TestProcessGroupIDResolvesParentGroupForChild(t *testing.T) {
-	cmd := exec.Command("bash", "-c", "sleep 300 & sleep 300")
+// TestKillConfiguredPortOwnerFreesNonLeaderListener guards the port reclaim
+// path: the listener is a child of the shell that started it, so its pid is not
+// its group leader. Signalling only that pid leaves the rest of the group
+// holding the port, which is what reclaiming a stale service must avoid.
+func TestKillConfiguredPortOwnerFreesNonLeaderListener(t *testing.T) {
+	port := freePort(t)
+	cmd := exec.Command("bash", "-c",
+		fmt.Sprintf("python3 -m http.server %d --bind 127.0.0.1 & sleep 300", port))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer stopProcessGroup(cmd.Process.Pid)
+	defer func() {
+		_ = service.StopProcessGroup(cmd.Process.Pid)
+		_, _ = cmd.Process.Wait()
+	}()
 
-	parentPID := cmd.Process.Pid
-	childPID, err := firstChildPID(parentPID)
+	if !waitForServing(t, port, true, 15*time.Second) {
+		t.Fatalf("listener never bound port %d", port)
+	}
+	pids, err := service.ListeningPIDs(port)
 	if err != nil {
-		t.Fatalf("firstChildPID() error = %v", err)
+		t.Fatalf("ListeningPIDs(%d) error = %v", port, err)
+	}
+	if len(pids) != 1 {
+		t.Fatalf("ListeningPIDs(%d) = %v, want exactly the listener", port, pids)
+	}
+	listenerPID := pids[0]
+	if listenerPID == cmd.Process.Pid {
+		t.Fatalf("listener pid %d is the group leader; want a non-leader listener", listenerPID)
 	}
 
-	parentPGID, err := processGroupID(parentPID)
-	if err != nil {
-		t.Fatalf("processGroupID(parent) error = %v", err)
+	if err := killConfiguredPortOwner(&ServicePortForward{Port: port}); err != nil {
+		t.Fatalf("killConfiguredPortOwner(%d) error = %v", port, err)
 	}
-	childPGID, err := processGroupID(childPID)
-	if err != nil {
-		t.Fatalf("processGroupID(child) error = %v", err)
+	if service.Alive(listenerPID) {
+		t.Fatalf("listener pid %d survived killConfiguredPortOwner", listenerPID)
 	}
-	if parentPGID != childPGID {
-		t.Fatalf("parent PGID = %d, child PGID = %d, want same group", parentPGID, childPGID)
-	}
-	if childPGID == childPID {
-		t.Fatalf("child PID %d equals its PGID; want non-leader listener case", childPID)
+	if !waitForServing(t, port, false, 5*time.Second) {
+		t.Fatalf("port %d still served after killConfiguredPortOwner", port)
 	}
 }
 
-func TestStopProcessGroupKillsNonLeaderListenerPID(t *testing.T) {
-	cmd := exec.Command("bash", "-c", "sleep 300 & sleep 300")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	parentPID := cmd.Process.Pid
-
-	childPID, err := firstChildPID(parentPID)
-	if err != nil {
-		_ = stopProcessGroup(parentPID)
-		t.Fatalf("firstChildPID() error = %v", err)
-	}
-
-	if err := stopProcessGroup(childPID); err != nil {
-		_ = stopProcessGroup(parentPID)
-		t.Fatalf("stopProcessGroup(child) error = %v", err)
-	}
-
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if !processAlive(childPID) {
-			_ = stopProcessGroup(parentPID)
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-
-	_ = stopProcessGroup(parentPID)
-	t.Fatalf("child listener PID %d still alive after stopProcessGroup", childPID)
-}
-
-func firstChildPID(parentPID int) (int, error) {
-	out, err := exec.Command("pgrep", "-P", strconv.Itoa(parentPID)).Output()
-	if err != nil {
-		return 0, err
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || lines[0] == "" {
-		return 0, exec.ErrNotFound
-	}
-	return strconv.Atoi(lines[0])
-}
-
-func TestParseProcStatState(t *testing.T) {
-	cases := []struct {
-		in    string
-		state byte
-		ok    bool
-	}{
-		{"123 (bash) S 1 123 123 0 -1", 'S', true},
-		{"9 (a b) Z 1 9 9 0 -1", 'Z', true},
-		{"42 (weird) name) R 1 42", 'R', true},
-		{"broken", 0, false},
-		{"1 () ", 0, false},
-	}
-	for _, tc := range cases {
-		got, ok := parseProcStatState([]byte(tc.in))
-		if ok != tc.ok || got != tc.state {
-			t.Fatalf("parseProcStatState(%q)=(%q,%v) want (%q,%v)", tc.in, got, ok, tc.state, tc.ok)
-		}
-	}
-}
-
-func TestProcessAliveOwnPID(t *testing.T) {
-	if !processAlive(os.Getpid()) {
-		t.Fatal("current process should be alive")
-	}
-	if processAlive(0) || processAlive(-1) {
-		t.Fatal("invalid pids must be dead")
-	}
-}
-
-func TestProcessAliveTreatsZombieAsDead(t *testing.T) {
+// TestServiceAliveTreatsZombieAsDead pins the zombie rule the extraction
+// inherits from go-pkgs/service: an unreaped child still answers kill(pid, 0),
+// so stop logic must not treat it as running, or restarts fail with
+// "process N did not exit".
+func TestServiceAliveTreatsZombieAsDead(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("zombie /proc state is Linux-specific")
 	}
@@ -147,14 +94,14 @@ func TestProcessAliveTreatsZombieAsDead(t *testing.T) {
 	if zombiePID <= 0 {
 		t.Fatal("failed to create zombie child")
 	}
-	if !processZombie(zombiePID) {
+	if !service.Zombie(zombiePID) {
 		t.Fatalf("pid %d should be zombie", zombiePID)
 	}
-	if processAlive(zombiePID) {
-		t.Fatalf("processAlive(%d) = true for zombie; want false", zombiePID)
+	if service.Alive(zombiePID) {
+		t.Fatalf("service.Alive(%d) = true for zombie; want false", zombiePID)
 	}
-	if err := stopProcessGroup(zombiePID); err != nil {
-		t.Fatalf("stopProcessGroup(zombie) error = %v", err)
+	if err := service.StopProcess(zombiePID); err != nil {
+		t.Fatalf("service.StopProcess(zombie) error = %v", err)
 	}
 }
 
@@ -164,7 +111,7 @@ func TestCreateOrUpdateRestartOfMissingPIDStillSaves(t *testing.T) {
 	enabled := true
 	def := ServiceDefinition{
 		Name:       "restart-flake",
-		Command:    "sleep 300",
+		Command:    "sleep 0.3",
 		WorkingDir: dir,
 		Enabled:    &enabled,
 	}
@@ -173,17 +120,21 @@ func TestCreateOrUpdateRestartOfMissingPIDStillSaves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	// Stale PID that is not alive (same class of failure as a zombie for stop).
-	m.mu.Lock()
-	procDef := m.definitions[0]
-	m.processes[saved.ID] = &serviceProcess{
-		def:     procDef,
-		pid:     1<<30 - 1,
-		desired: true,
-		status:  StatusRunning,
+	if _, err := m.Start(saved.ID); err != nil {
+		t.Fatalf("start: %v", err)
 	}
-	m.mu.Unlock()
+	// Let the child exit on its own so the supervisor's tracked pid is gone by
+	// the time the restart runs; this is the same class of failure as a zombie
+	// for stop, where the pid it remembers is no longer stoppable.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if proc, ok := m.sup.Process(saved.ID); !ok || proc.PID == 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 
+	procDef := m.defs[0]
 	procDef.Command = "sleep 301"
 	out, err := m.createOrUpdate(procDef, true)
 	if err != nil {

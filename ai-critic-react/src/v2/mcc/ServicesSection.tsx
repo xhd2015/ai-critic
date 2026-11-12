@@ -5,7 +5,8 @@ import { deleteService, disableService, enableService, fetchServicePresets, fetc
 import type { ProviderInfo } from '../../hooks/usePortForwards';
 import { ConfirmModal } from './ConfirmModal';
 import { ServiceCard } from './ServiceCard';
-import { ServiceForm } from './ServiceForm';
+import { ServiceFormModal } from './ServiceFormModal';
+import { AddServiceButton } from './AddServiceButton';
 import { SystemServiceCard } from './SystemServiceCard';
 import { createDefaultForm, parseUpgradeSteps, parseUpgradeTimeoutInput, toFormState, type ServiceFormState } from './serviceFormState';
 import { disableMessage, enableMessage, parseEnvText } from './serviceFormat';
@@ -37,6 +38,7 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<ServiceFormState>(createDefaultForm());
+    const [lifetimeNotice, setLifetimeNotice] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ServiceStatus | null>(null);
     const [disableTarget, setDisableTarget] = useState<ServiceStatus | null>(null);
     const [enableTarget, setEnableTarget] = useState<ServiceStatus | null>(null);
@@ -70,6 +72,12 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
     }, []);
 
     useEffect(() => {
+        if (!lifetimeNotice) return;
+        const timer = setTimeout(() => setLifetimeNotice(null), 12000);
+        return () => clearTimeout(timer);
+    }, [lifetimeNotice]);
+
+    useEffect(() => {
         fetchHomeDir()
             .then((dir) => setHomeDir(dir))
             .catch(() => {});
@@ -84,10 +92,21 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
     const resetForm = () => {
         setForm(createDefaultForm(homeDir));
         setShowForm(false);
+        setActionError(null);
     };
+
+    /** The service behind the open form, kept live by the poll. */
+    const editingService = form.id ? services.find((service) => service.id === form.id) : undefined;
 
     const openNewForm = () => {
         setForm(createDefaultForm(homeDir));
+        setActionError(null);
+        setShowForm(true);
+    };
+
+    const openEditForm = (service: ServiceStatus) => {
+        setForm(toFormState(service));
+        setActionError(null);
         setShowForm(true);
     };
 
@@ -114,6 +133,32 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
         if (parsedEnv.error) {
             setActionError(parsedEnv.error);
             return;
+        }
+
+        // The server re-validates and normalises; catch the obvious mistakes
+        // here so the dialog can report them without a round trip.
+        const extraPath = form.extraPath.trim();
+        if (/[\r\n]/.test(form.extraPath)) {
+            setActionError('Extra PATH must be a single line of directories separated by ":".');
+            return;
+        }
+        if (extraPath.includes('$')) {
+            setActionError('Extra PATH does not expand variables; use a literal directory instead.');
+            return;
+        }
+        if (extraPath) {
+            const dirs = extraPath.split(':');
+            if (dirs.some((dir) => !dir.trim())) {
+                setActionError('Extra PATH has an empty entry; separate directories with ":".');
+                return;
+            }
+            const relative = dirs
+                .map((dir) => dir.trim())
+                .find((dir) => !dir.startsWith('/') && !dir.startsWith('~'));
+            if (relative) {
+                setActionError(`Extra PATH directory must be absolute: ${relative}`);
+                return;
+            }
         }
 
         let portForward: ServiceDefinition['portForward'];
@@ -147,6 +192,10 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
             }
         }
 
+        // Detached only takes effect on the next start, so remember how the
+        // running process was started before the save changes the definition.
+        const previous = editingService;
+
         setSaving(true);
         setActionError(null);
         try {
@@ -162,6 +211,9 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 command,
                 workingDir: workingDir || undefined,
                 extraEnv: parsedEnv.env,
+                extraPath: extraPath || undefined,
+                inheritInteractiveShellEnv: form.inheritShellEnv,
+                detached: form.detached,
                 portForward,
                 // Carried through so saving the form cannot silently drop the
                 // configured upgrade steps.
@@ -174,6 +226,11 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 authToken: form.authTokenMode === 'custom' ? form.authToken : undefined,
             });
             await refreshServices();
+            if (previous && previous.status === 'running' && !!previous.detachedActive !== form.detached) {
+                setLifetimeNotice(
+                    `${name} is still running with its previous lifetime. Restart it to apply the new setting.`,
+                );
+            }
             resetForm();
         } catch (err) {
             setActionError(err instanceof Error ? err.message : String(err));
@@ -199,7 +256,9 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
             </div>
 
             {error && <div className="mcc-ports-error">Error: {error}</div>}
-            {actionError && <div className="mcc-ports-error">{actionError}</div>}
+            {/* Save errors belong to the dialog; the page only reports them if
+                the dialog is gone (e.g. closed mid-save). */}
+            {actionError && !showForm && <div className="mcc-ports-error">{actionError}</div>}
 
             <div className="mcc-service-group">
                 <h3 className="mcc-service-group-title">User Services</h3>
@@ -207,15 +266,26 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                     Define commands the server should keep alive, optionally with managed port forwarding.
                 </div>
 
+                {lifetimeNotice && (
+                    <div className="mcc-service-notice" role="status">
+                        <span>{lifetimeNotice}</span>
+                        <button
+                            type="button"
+                            className="mcc-service-notice-close"
+                            aria-label="Dismiss"
+                            onClick={() => setLifetimeNotice(null)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
+
                 <div className="mcc-service-list">
                     {userServices.map((service) => (
                         <ServiceCard
                             key={service.id}
                             service={service}
-                            onEdit={() => {
-                                setForm(toFormState(service));
-                                setShowForm(true);
-                            }}
+                            onEdit={() => openEditForm(service)}
                             onStart={() => handleAction(() => startService(service.id))}
                             onStop={() => handleAction(() => stopService(service.id))}
                             onRestart={() => handleAction(() => restartService(service.id))}
@@ -231,19 +301,7 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 </div>
 
                 <div className="mcc-add-port-section">
-                    <ServiceForm
-                        open={showForm}
-                        form={form}
-                        onChange={setForm}
-                        onSubmit={handleSave}
-                        onCancel={resetForm}
-                        onOpenNew={openNewForm}
-                        saving={saving}
-                        homeDir={homeDir}
-                        providers={providerButtons}
-                        presets={presets}
-                        onApplyPreset={applyPreset}
-                    />
+                    <AddServiceButton onClick={openNewForm} />
                 </div>
             </div>
 
@@ -324,6 +382,21 @@ export function ServicesSection({ availableProviders }: ServicesSectionProps) {
                 />
             )}
 
+            {showForm && (
+                <ServiceFormModal
+                    form={form}
+                    onChange={setForm}
+                    onSubmit={handleSave}
+                    onClose={resetForm}
+                    saving={saving}
+                    error={actionError}
+                    homeDir={homeDir}
+                    providers={providerButtons}
+                    presets={presets}
+                    onApplyPreset={applyPreset}
+                    service={editingService}
+                />
+            )}
         </section>
     );
 }

@@ -1,45 +1,36 @@
 import { useEffect, useState } from 'react';
 import { fetchOwnedDomains } from '../../api/cloudflare';
-import type { ServicePreset } from '../../api/services';
+import type { ServicePreset, ServiceStatus } from '../../api/services';
 import type { ProviderInfo } from '../../hooks/usePortForwards';
 import { TunnelProviders } from '../../hooks/usePortForwards';
-import { PlusIcon } from '../../pure-view/icons/PlusIcon';
 import { ServiceAuthFields } from './ServiceAuthFields';
 import type { ServiceFormState } from './serviceFormState';
 
-export interface ServiceFormProps {
-    open: boolean;
+export interface ServiceFormFieldsProps {
     form: ServiceFormState;
     onChange: (updater: (prev: ServiceFormState) => ServiceFormState) => void;
-    onSubmit: () => void;
-    onCancel: () => void;
-    onOpenNew: () => void;
-    saving: boolean;
     homeDir: string;
     providers: ProviderInfo[];
     /** Presets prefill the form; nothing is created until the user saves. */
     presets: ServicePreset[];
     onApplyPreset: (preset: ServicePreset) => void;
+    /** The service being edited, so start-time settings can flag a pending restart. */
+    service?: ServiceStatus;
 }
 
-/** ServiceForm adds or edits a user service, or offers to open the form. */
-export function ServiceForm({ open, form, onChange, onSubmit, onCancel, onOpenNew, saving, homeDir, providers, presets, onApplyPreset }: ServiceFormProps) {
-    if (!open) {
-        return (
-            <button className="mcc-add-port-btn" onClick={onOpenNew}>
-                <PlusIcon />
-                <span>Add Service</span>
-            </button>
-        );
-    }
+/**
+ * ServiceFormFields is the body of the add/edit service dialog: every field,
+ * with no chrome and no submit button. The modal owns those.
+ */
+export function ServiceFormFields({ form, onChange, homeDir, providers, presets, onApplyPreset, service }: ServiceFormFieldsProps) {
+    // Lifetime is frozen when a process starts, so the checkbox can disagree
+    // with the process that is running right now. Say so instead of letting the
+    // save look like it already took effect.
+    const runningDetached = service && service.status === 'running' ? !!service.detachedActive : undefined;
+    const lifetimePending = runningDetached !== undefined && runningDetached !== form.detached;
 
     return (
-        <div className="mcc-add-port-form">
-            <div className="mcc-add-port-header">
-                <span>{form.id ? 'Edit Service' : 'Add Service'}</span>
-                <button className="mcc-close-btn" onClick={onCancel}>×</button>
-            </div>
-
+        <>
             {!form.id && presets.length > 0 && (
                 <div className="mcc-service-presets">
                     <label>Start from a preset</label>
@@ -94,9 +85,68 @@ export function ServiceForm({ open, form, onChange, onSubmit, onCancel, onOpenNe
                         placeholder={'NODE_ENV=development\nPORT=3000'}
                         value={form.extraEnvText}
                         onChange={(e) => onChange((prev) => ({ ...prev, extraEnvText: e.target.value }))}
-                        rows={5}
+                        rows={4}
                     />
                     <div className="mcc-service-field-hint">One <code>KEY=VALUE</code> entry per line.</div>
+                </div>
+                <div className="mcc-form-field">
+                    <label>Extra PATH</label>
+                    <input
+                        type="text"
+                        placeholder="~/.local/bin:~/go/bin"
+                        value={form.extraPath}
+                        onChange={(e) => onChange((prev) => ({ ...prev, extraPath: e.target.value }))}
+                    />
+                    <div className="mcc-service-field-hint">
+                        Absolute directories <strong>prepended</strong> to <code>PATH</code>, separated by <code>:</code>.
+                        <code>~</code> is expanded; variables are not.
+                    </div>
+                </div>
+                <div className="mcc-form-field">
+                    <label htmlFor="mcc-service-inherit-shell-env">Interactive Shell Env</label>
+                    <label className="mcc-service-inherit" htmlFor="mcc-service-inherit-shell-env">
+                        <input
+                            id="mcc-service-inherit-shell-env"
+                            type="checkbox"
+                            checked={form.inheritShellEnv}
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                onChange((prev) => ({ ...prev, inheritShellEnv: checked }));
+                            }}
+                        />
+                        <span>Inherit interactive shell env</span>
+                    </label>
+                    <div className="mcc-service-field-hint">
+                        Runs <code>$SHELL -lic 'env -0'</code> once at start and merges the result, so exports from{' '}
+                        <code>~/.zshrc</code> / <code>~/.bashrc</code> apply. Shell values win over the process env;
+                        a failure is reported on the service instead of blocking the start.
+                    </div>
+                </div>
+                <div className="mcc-form-field">
+                    <label htmlFor="mcc-service-detached">Lifetime</label>
+                    <label className="mcc-service-detach" htmlFor="mcc-service-detached">
+                        <input
+                            id="mcc-service-detached"
+                            type="checkbox"
+                            checked={form.detached}
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                onChange((prev) => ({ ...prev, detached: checked }));
+                            }}
+                        />
+                        <span>Detached — keep running after ai-critic quits</span>
+                    </label>
+                    <div className="mcc-service-field-hint">
+                        Applies on the next start. A running service keeps its current lifetime until you restart it;
+                        Detached services are adopted on the next boot.
+                    </div>
+                    {lifetimePending && (
+                        <div className="mcc-service-lifetime-notice" role="status">
+                            {form.detached
+                                ? 'This service is running attached. Restart it to keep it running after ai-critic quits.'
+                                : 'This service is running detached, so it still survives quitting ai-critic. Restart it to apply the new lifetime.'}
+                        </div>
+                    )}
                 </div>
                 <div className="mcc-form-field">
                     <label>Upgrade Pre-Stop Steps</label>
@@ -105,7 +155,7 @@ export function ServiceForm({ open, form, onChange, onSubmit, onCancel, onOpenNe
                         placeholder={'git fetch --all\ngo build -o /tmp/app.new ./cmd/app'}
                         value={form.upgradePreStopText}
                         onChange={(e) => onChange((prev) => ({ ...prev, upgradePreStopText: e.target.value }))}
-                        rows={4}
+                        rows={3}
                     />
                     <div className="mcc-service-field-hint">
                         One shell step per line, run by <code>service upgrade</code> while the service is still
@@ -119,7 +169,7 @@ export function ServiceForm({ open, form, onChange, onSubmit, onCancel, onOpenNe
                         placeholder={'mv /tmp/app.new "$REMOTE_AGENT_UPGRADE_TARGET"'}
                         value={form.upgradePostStopText}
                         onChange={(e) => onChange((prev) => ({ ...prev, upgradePostStopText: e.target.value }))}
-                        rows={4}
+                        rows={3}
                     />
                     <div className="mcc-service-field-hint">
                         One shell step per line, run after the service stops. A failure restarts the service
@@ -219,11 +269,7 @@ export function ServiceForm({ open, form, onChange, onSubmit, onCancel, onOpenNe
                 onAuthTokenModeChange={(authTokenMode) => onChange((prev) => ({ ...prev, authTokenMode }))}
                 onAuthTokenChange={(authToken) => onChange((prev) => ({ ...prev, authToken }))}
             />
-
-            <button className="mcc-forward-btn" onClick={onSubmit} disabled={saving}>
-                {saving ? 'Saving...' : form.id ? 'Update Service' : 'Save Service'}
-            </button>
-        </div>
+        </>
     );
 }
 

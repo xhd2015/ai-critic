@@ -16,7 +16,8 @@ func TestServiceForwardDoesNotReplaceRemoteTargetOnSamePort(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pfm.RemoveSelector(remote.ID)
-	m := &Manager{processes: map[string]*serviceProcess{"svc-local": {}}, portForwardManager: pfm}
+	m := newHopsManager()
+	m.portForwardManager = pfm
 	def := ServiceDefinition{PortForward: &ServicePortForward{Port: 9476, Label: "local.example", Provider: provider.name}}
 	if err := m.ensurePortForward("svc-local", def); err != nil {
 		t.Fatal(err)

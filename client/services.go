@@ -32,42 +32,51 @@ type ServicePortForwardStatus struct {
 }
 
 type ServiceDefinition struct {
-	ID                    string              `json:"id,omitempty"`
-	Name                  string              `json:"name"`
-	Command               string              `json:"command"`
-	WorkingDir            string              `json:"workingDir,omitempty"`
-	ExtraEnv              map[string]string   `json:"extraEnv,omitempty"`
-	PortForward           *ServicePortForward `json:"portForward,omitempty"`
-	UpgradeTarget         string              `json:"upgradeTarget,omitempty"`
-	UpgradePreStopCmds    []string            `json:"upgradePreStopCmds,omitempty"`
-	UpgradePostStopCmds   []string            `json:"upgradePostStopCmds,omitempty"`
-	UpgradeTimeoutSeconds *int                `json:"upgradeTimeoutSeconds,omitempty"`
-	Enabled               *bool               `json:"enabled,omitempty"`
-	RequireAuth           bool                `json:"requireAuth,omitempty"`
-	AuthUser              string              `json:"authUser,omitempty"`
-	AuthTokenMode         string              `json:"authTokenMode,omitempty"`
-	AuthToken             string              `json:"authToken,omitempty"`
+	ID                         string              `json:"id,omitempty"`
+	Name                       string              `json:"name"`
+	Command                    string              `json:"command"`
+	WorkingDir                 string              `json:"workingDir,omitempty"`
+	ExtraEnv                   map[string]string   `json:"extraEnv,omitempty"`
+	ExtraPath                  string              `json:"extraPath,omitempty"`
+	InheritInteractiveShellEnv bool                `json:"inheritInteractiveShellEnv,omitempty"`
+	PortForward                *ServicePortForward `json:"portForward,omitempty"`
+	UpgradeTarget              string              `json:"upgradeTarget,omitempty"`
+	UpgradePreStopCmds         []string            `json:"upgradePreStopCmds,omitempty"`
+	UpgradePostStopCmds        []string            `json:"upgradePostStopCmds,omitempty"`
+	UpgradeTimeoutSeconds      *int                `json:"upgradeTimeoutSeconds,omitempty"`
+	Enabled                    *bool               `json:"enabled,omitempty"`
+	Detached                   bool                `json:"detached,omitempty"`
+	RequireAuth                bool                `json:"requireAuth,omitempty"`
+	AuthUser                   string              `json:"authUser,omitempty"`
+	AuthTokenMode              string              `json:"authTokenMode,omitempty"`
+	AuthToken                  string              `json:"authToken,omitempty"`
 }
 
 type ServiceStatus struct {
-	ID             string                    `json:"id"`
-	Name           string                    `json:"name"`
-	Kind           string                    `json:"kind,omitempty"`
-	Description    string                    `json:"description,omitempty"`
-	Command        string                    `json:"command"`
-	WorkingDir     string                    `json:"workingDir,omitempty"`
-	ExtraEnv       map[string]string         `json:"extraEnv,omitempty"`
-	EffectivePath  string                    `json:"effectivePath,omitempty"`
-	LogPath        string                    `json:"logPath"`
-	Status         string                    `json:"status"`
-	PID            int                       `json:"pid"`
-	LastStartedAt  string                    `json:"lastStartedAt,omitempty"`
-	LastExitedAt   string                    `json:"lastExitedAt,omitempty"`
-	LastExitError  string                    `json:"lastExitError,omitempty"`
-	DesiredRunning bool                      `json:"desiredRunning"`
-	Enabled        bool                      `json:"enabled"`
-	PortForward    *ServicePortForwardStatus `json:"portForward,omitempty"`
-	UpgradeTarget  string                    `json:"upgradeTarget,omitempty"`
+	ID                         string                    `json:"id"`
+	Name                       string                    `json:"name"`
+	Kind                       string                    `json:"kind,omitempty"`
+	Description                string                    `json:"description,omitempty"`
+	Command                    string                    `json:"command"`
+	WorkingDir                 string                    `json:"workingDir,omitempty"`
+	ExtraEnv                   map[string]string         `json:"extraEnv,omitempty"`
+	ExtraPath                  string                    `json:"extraPath,omitempty"`
+	InheritInteractiveShellEnv bool                      `json:"inheritInteractiveShellEnv,omitempty"`
+	ShellEnvError              string                    `json:"shellEnvError,omitempty"`
+	EffectivePath              string                    `json:"effectivePath,omitempty"`
+	LogPath                    string                    `json:"logPath"`
+	Status                     string                    `json:"status"`
+	PID                        int                       `json:"pid"`
+	LastStartedAt              string                    `json:"lastStartedAt,omitempty"`
+	LastExitedAt               string                    `json:"lastExitedAt,omitempty"`
+	LastExitError              string                    `json:"lastExitError,omitempty"`
+	DesiredRunning             bool                      `json:"desiredRunning"`
+	Enabled                    bool                      `json:"enabled"`
+	Detached                   bool                      `json:"detached"`
+	DetachedActive             bool                      `json:"detachedActive"`
+	Adopted                    bool                      `json:"adopted,omitempty"`
+	PortForward                *ServicePortForwardStatus `json:"portForward,omitempty"`
+	UpgradeTarget              string                    `json:"upgradeTarget,omitempty"`
 	// Upgrade step configuration, mirrored so `service update` round-trips it.
 	UpgradePreStopCmds    []string `json:"upgradePreStopCmds,omitempty"`
 	UpgradePostStopCmds   []string `json:"upgradePostStopCmds,omitempty"`

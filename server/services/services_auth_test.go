@@ -85,8 +85,8 @@ func TestCreateOrUpdatePersistsAuthFields(t *testing.T) {
 	useTempServicesConfig(t)
 
 	m := &Manager{
-		definitions: []ServiceDefinition{},
-		processes:   map[string]*serviceProcess{},
+		defs: []ServiceDefinition{},
+		hops: make(map[string]*forwardHop),
 	}
 	saved, err := m.CreateOrUpdateNoRestart(ServiceDefinition{
 		Name:          "web",
@@ -106,8 +106,8 @@ func TestCreateOrUpdatePersistsAuthFields(t *testing.T) {
 	if len(saved.AuthTokens) != 1 || saved.AuthTokens[0] != "s3cret" {
 		t.Fatalf("inspect tokens = %#v, want [s3cret]", saved.AuthTokens)
 	}
-	if m.definitions[0].AuthToken != "s3cret" || m.definitions[0].AuthTokenMode != AuthTokenModeCustom {
-		t.Fatalf("saved definition auth = %#v", m.definitions[0])
+	if m.defs[0].AuthToken != "s3cret" || m.defs[0].AuthTokenMode != AuthTokenModeCustom {
+		t.Fatalf("saved definition auth = %#v", m.defs[0])
 	}
 }
 
@@ -116,13 +116,9 @@ func TestEnsurePortForwardWithAuthTunnelsProxyPort(t *testing.T) {
 	provider := &testPortForwardProvider{name: portforward.ProviderCloudflareOwned}
 	pfm.RegisterProvider(provider)
 
-	m := &Manager{
-		processes: map[string]*serviceProcess{
-			"svc-auth": {},
-		},
-		portForwardManager: pfm,
-		dataDir:            t.TempDir(),
-	}
+	m := newHopsManager()
+	m.portForwardManager = pfm
+	m.dataDir = t.TempDir()
 
 	err := m.ensurePortForward("svc-auth", ServiceDefinition{
 		RequireAuth:   true,
@@ -140,7 +136,7 @@ func TestEnsurePortForwardWithAuthTunnelsProxyPort(t *testing.T) {
 	}
 	t.Cleanup(func() { m.teardownAuthHop("svc-auth") })
 
-	proc := m.processes["svc-auth"]
+	proc := m.hops["svc-auth"]
 	if proc.authProxy == nil || !proc.authProxy.Alive() {
 		t.Fatal("auth proxy was not started")
 	}

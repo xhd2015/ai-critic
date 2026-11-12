@@ -80,6 +80,12 @@ Options:
                               Can be repeated; runs in order.
   --upgrade-timeout DURATION  Per-step timeout, e.g. 10m; 0 disables it.
   --env KEY=VALUE             Environment variable. Can be repeated.
+  --extra-path DIRS           Extra directories prepended to PATH (os path-list
+                              syntax, ~ allowed). Can be repeated.
+  --inherit-shell-env         Merge the interactive login shell env ($SHELL -i)
+                              so ~/.zshrc / ~/.bashrc exports apply.
+  --detached                  Keep the service running when remote-agent quits.
+                              A start-time setting: it applies on the next start.
   --port N                    Port-forward port.
   --port-label LABEL          Port-forward label.
   --port-provider PROVIDER    Port-forward provider.
@@ -137,6 +143,14 @@ Options:
   --unset-env KEY             Remove an environment variable.
                               Can be repeated.
   --clear-env                 Remove all environment variables.
+  --extra-path DIRS           Set the extra PATH directories prepended to PATH.
+  --inherit-shell-env         Inherit the interactive login shell environment.
+  --no-inherit-shell-env      Stop inheriting the interactive shell environment.
+  --detached                  Keep the service running when remote-agent quits.
+                              Applies on the next start; a running process keeps
+                              its current lifetime until it is restarted.
+  --no-detached               Stop the service when remote-agent quits.
+                              Applies on the next start.
   --port N                    Set port-forward port.
   --port-label LABEL          Set port-forward label.
   --port-provider PROVIDER    Set port-forward provider.
@@ -491,6 +505,27 @@ func printService(service client.ServiceStatus) {
 	if service.UpgradeTarget != "" {
 		fmt.Printf("%s %s\n", label("Upgrade"), service.UpgradeTarget)
 	}
+	if service.ExtraPath != "" {
+		fmt.Printf("%s %s\n", label("Extra PATH"), service.ExtraPath)
+	}
+	if service.InheritInteractiveShellEnv {
+		fmt.Printf("%s %s\n", label("Shell Env"), "interactive shell env inherited")
+	}
+	if service.ShellEnvError != "" {
+		fmt.Printf("%s %s\n", label("Shell Env Err"), service.ShellEnvError)
+	}
+	if service.Detached {
+		fmt.Printf("%s %s\n", label("Lifetime"), "detached (survives app quit and restart)")
+	}
+	// A pending edit is the one state where the saved flag and the running
+	// process disagree; show both instead of letting one of them win silently.
+	if service.Status == "running" && service.DetachedActive != service.Detached {
+		fmt.Printf("%s %s\n", label("Lifetime"), fmt.Sprintf("pending restart: running %s, saved %s",
+			serviceLifetimeWord(service.DetachedActive), serviceLifetimeWord(service.Detached)))
+	}
+	if service.Adopted {
+		fmt.Printf("%s %s\n", label("Adopted"), "yes (taken over from a previous session)")
+	}
 
 	if service.PortForward != nil {
 		fmt.Printf("%s %s\n", label("Port"), formatPortForward(service.PortForward))
@@ -507,6 +542,13 @@ func printService(service client.ServiceStatus) {
 	if service.LastExitError != "" {
 		fmt.Printf("%s %s\n", label("Last Error"), service.LastExitError)
 	}
+}
+
+func serviceLifetimeWord(detached bool) string {
+	if detached {
+		return "detached"
+	}
+	return "attached"
 }
 
 func formatServiceAuthLines(service client.ServiceStatus) []string {

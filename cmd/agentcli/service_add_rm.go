@@ -18,6 +18,9 @@ func runServiceAdd(resolve func() (*client.Client, error), args []string) error 
 		upgradePostStopCmds []string
 		upgradeTimeout      string
 		envSet              []string
+		extraPath           string
+		inheritShellEnv     bool
+		detached            bool
 		port                int
 		portLabel           string
 		portProvider        string
@@ -39,6 +42,9 @@ func runServiceAdd(resolve func() (*client.Client, error), args []string) error 
 		StringSlice("--upgrade-post-stop-cmd", &upgradePostStopCmds).
 		String("--upgrade-timeout", &upgradeTimeout).
 		StringSlice("--env", &envSet).
+		String("--extra-path", &extraPath).
+		Bool("--inherit-shell-env", &inheritShellEnv).
+		Bool("--detached", &detached).
 		Int("--port", &port).
 		String("--port-label", &portLabel).
 		String("--port-provider", &portProvider).
@@ -68,12 +74,15 @@ func runServiceAdd(resolve func() (*client.Client, error), args []string) error 
 	}
 
 	def := client.ServiceDefinition{
-		Name:                name,
-		Command:             command,
-		WorkingDir:          strings.TrimSpace(workingDir),
-		UpgradeTarget:       strings.TrimSpace(upgradeTarget),
-		UpgradePreStopCmds:  upgradePreStopCmds,
-		UpgradePostStopCmds: upgradePostStopCmds,
+		Name:                       name,
+		Command:                    command,
+		WorkingDir:                 strings.TrimSpace(workingDir),
+		UpgradeTarget:              strings.TrimSpace(upgradeTarget),
+		UpgradePreStopCmds:         upgradePreStopCmds,
+		UpgradePostStopCmds:        upgradePostStopCmds,
+		ExtraPath:                  strings.TrimSpace(extraPath),
+		InheritInteractiveShellEnv: inheritShellEnv,
+		Detached:                   detached,
 	}
 	if strings.TrimSpace(upgradeTimeout) != "" {
 		seconds, _, err := parseUpgradeTimeout(upgradeTimeout, nil)

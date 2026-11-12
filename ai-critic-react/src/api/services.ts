@@ -24,6 +24,12 @@ export interface ServiceStatus {
     command: string;
     workingDir?: string;
     extraEnv?: Record<string, string>;
+    /** Extra directories prepended to PATH, in OS path-list syntax. */
+    extraPath?: string;
+    /** Merge the interactive login shell env into the service env at start. */
+    inheritInteractiveShellEnv?: boolean;
+    /** Non-fatal reason the interactive shell env could not be resolved. */
+    shellEnvError?: string;
     effectivePath?: string;
     logPath: string;
     status: 'starting' | 'running' | 'stopped' | 'error' | 'unknown';
@@ -33,6 +39,12 @@ export interface ServiceStatus {
     lastExitError?: string;
     desiredRunning: boolean;
     enabled?: boolean;
+    /** Saved intent: keep the process alive when the host quits. */
+    detached?: boolean;
+    /** Lifetime of the process that is running now (differs from `detached` until a restart). */
+    detachedActive?: boolean;
+    /** The process was taken over from a previous host instead of being spawned. */
+    adopted?: boolean;
     portForward?: ServicePortForwardStatus;
     /** Remembered remote path that `service upgrade` moves an uploaded binary to. */
     upgradeTarget?: string;
@@ -101,6 +113,12 @@ export interface ServiceDefinition {
     command: string;
     workingDir?: string;
     extraEnv?: Record<string, string>;
+    /** Extra directories prepended to PATH, in OS path-list syntax. */
+    extraPath?: string;
+    /** Merge the interactive login shell env into the service env at start. */
+    inheritInteractiveShellEnv?: boolean;
+    /** Keep the process alive when the host quits; applied on the next start. */
+    detached?: boolean;
     portForward?: ServicePortForward;
     upgradeTarget?: string;
     upgradePreStopCmds?: string[];
