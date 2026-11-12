@@ -26,10 +26,13 @@ type backupPrepared struct {
 type ArchivePackProgress func(name, detail string) error
 
 func prepareBackup(home string, exclude, include []string, gitOpts GitScanOptions) (*backupPrepared, error) {
+	start := time.Now()
 	home, err := resolveHome(home)
 	if err != nil {
 		return nil, err
 	}
+	backupLogf("prepare: start home=%s skip_git_scan=%v max_depth=%d",
+		home, gitOpts.SkipGitDirsScan, gitOpts.GitDirsScanMaxDepth)
 	rules, err := ResolveExclusionRules(home, exclude, include)
 	if err != nil {
 		return nil, err
@@ -43,12 +46,21 @@ func prepareBackup(home string, exclude, include []string, gitOpts GitScanOption
 	if err != nil {
 		return nil, err
 	}
+	backupLogf("prepare: walked home=%s dot_files=%d dot_dirs=%d all_files=%d excluded=%d elapsed=%s",
+		home, len(res.DotFiles), len(res.DirStats), len(allFiles), len(res.ExcludedStats),
+		time.Since(start).Round(time.Millisecond))
 	dotFilesTotal := totalsFromDotFiles(res.DotFiles)
 	dotDirsTotal := totalsFromDirStats(dirStats)
 	gitRepos, gitSkipped, err := ScanGitRepos(home, gitOpts)
 	if err != nil {
 		return nil, err
 	}
+	gitCount := 0
+	if gitRepos != nil {
+		gitCount = len(gitRepos.Repos)
+	}
+	backupLogf("prepare: done home=%s git_repos=%d git_skipped=%v elapsed=%s",
+		home, gitCount, gitSkipped, time.Since(start).Round(time.Millisecond))
 	plan := &MachineBackupPlan{
 		Home:          home,
 		DotFiles:      res.DotFiles,

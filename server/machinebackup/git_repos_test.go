@@ -107,6 +107,83 @@ func TestBuildPlanGitReposIntegration(t *testing.T) {
 	}
 }
 
+func TestScanGitReposReusesHomeScopedCache(t *testing.T) {
+	home, want := newGitScanFixture(t)
+
+	first, skipped, err := ScanGitRepos(home, GitScanOptions{})
+	if err != nil {
+		t.Fatalf("first ScanGitRepos: %v", err)
+	}
+	if skipped {
+		t.Fatal("first scan reported skipped")
+	}
+	assertSingleRepo(t, first, want)
+
+	indexPath := filepath.Join(gitReposScanCacheRoot(home), "home", "repos.json")
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("expected durable scan cache at %s: %v", indexPath, err)
+	}
+
+	// Second backup reuses the warm index; it must still describe the same repo.
+	second, _, err := ScanGitRepos(home, GitScanOptions{})
+	if err != nil {
+		t.Fatalf("second ScanGitRepos: %v", err)
+	}
+	assertSingleRepo(t, second, want)
+	if second.CapturedAt.Before(first.CapturedAt) {
+		t.Fatalf("captured_at went backwards: %s < %s", second.CapturedAt, first.CapturedAt)
+	}
+}
+
+func TestScanGitReposDepthLimitedBypassesCache(t *testing.T) {
+	home, _ := newGitScanFixture(t)
+
+	// A depth-limited scan cannot be served warm (the warm path ignores
+	// MaxDepth), so it must stay cold and leave no cache behind.
+	if _, _, err := ScanGitRepos(home, GitScanOptions{GitDirsScanMaxDepth: 1}); err != nil {
+		t.Fatalf("ScanGitRepos: %v", err)
+	}
+	cachePath := gitReposScanCacheRoot(home)
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Fatalf("depth-limited scan wrote scan cache at %s (err=%v)", cachePath, err)
+	}
+}
+
+func newGitScanFixture(t *testing.T) (home, repoPath string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not in PATH")
+	}
+	home = t.TempDir()
+	repoPath = filepath.Join(home, ".wrk-test", "main")
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repoPath, "init")
+	gitRun(t, repoPath, "config", "user.email", "test@example.com")
+	gitRun(t, repoPath, "config", "user.name", "Test User")
+	gitRun(t, repoPath, "branch", "-M", "main")
+	if err := os.WriteFile(filepath.Join(repoPath, "README.md"), []byte("fixture\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repoPath, "add", "README.md")
+	gitRun(t, repoPath, "commit", "-m", "backup git fixture")
+	return home, ".wrk-test/main"
+}
+
+func assertSingleRepo(t *testing.T, snap *GitRepoWorktreesSnapshot, wantPath string) {
+	t.Helper()
+	if snap == nil {
+		t.Fatal("snapshot is nil")
+	}
+	if len(snap.Repos) != 1 {
+		t.Fatalf("repos = %+v, want exactly 1", snap.Repos)
+	}
+	if snap.Repos[0].Path != wantPath {
+		t.Fatalf("repo path = %q, want %q", snap.Repos[0].Path, wantPath)
+	}
+}
+
 func mustParseRFC3339(t *testing.T, value string) time.Time {
 	t.Helper()
 	parsed, err := time.Parse(time.RFC3339, value)
