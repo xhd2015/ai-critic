@@ -30,6 +30,7 @@ import (
 	opencode_exposed "github.com/xhd2015/ai-critic/server/agents/opencode/exposed_opencode"
 	"github.com/xhd2015/ai-critic/server/agents/web/cursorweb"
 	customagentapi "github.com/xhd2015/ai-critic/server/api"
+	serverappmon "github.com/xhd2015/ai-critic/server/appmon"
 	"github.com/xhd2015/ai-critic/server/auth"
 	"github.com/xhd2015/ai-critic/server/bookmarks"
 	"github.com/xhd2015/ai-critic/server/browser"
@@ -744,6 +745,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	RegisterServerStatusAPI(mux)
 	serverprocmon.RegisterAPI(mux)
 	serverdiskmon.RegisterAPI(mux)
+	serverappmon.RegisterAPI(mux)
 
 	// Server config API
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {

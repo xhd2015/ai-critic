@@ -43,6 +43,7 @@ func buildSnapshot(prev, cur []rawProc, dt time.Duration, at time.Time, mem Memo
 			PPID:       p.PPID,
 			Name:       displayName(p.Cmd),
 			Cmd:        p.Cmd,
+			BundlePath: BundlePathOf(p.Cmd),
 			User:       p.User,
 			State:      p.State,
 			CPUPercent: cpuPct,

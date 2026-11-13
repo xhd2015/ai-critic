@@ -120,10 +120,9 @@ func displayName(cmd string) string {
 	if cmd == "" {
 		return "?"
 	}
-	if i := strings.Index(cmd, ".app"); i >= 0 {
-		start := strings.LastIndex(cmd[:i], "/")
-		name := cmd[start+1 : i]
-		if name != "" {
+	if bundle := BundlePathOf(cmd); bundle != "" {
+		name := filepath.Base(strings.TrimSuffix(bundle, ".app"))
+		if name != "" && name != "." {
 			return name
 		}
 	}
@@ -345,4 +344,28 @@ func parseLinuxMeminfo(data string) Memory {
 		SwapFree:        swapFree,
 		SwapUsedPercent: swapPct,
 	}
+}
+
+// BundlePathOf returns the .app bundle that owns a process command line, or "".
+// The first ".app" component wins: helper processes report a command line such
+// as "/Applications/Google Chrome.app/Contents/Frameworks/…", and every helper
+// must attribute to the same visible bundle.
+func BundlePathOf(cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	if !strings.HasPrefix(cmd, "/") {
+		return ""
+	}
+	const suffix = ".app"
+	for from := 0; from < len(cmd); {
+		i := strings.Index(cmd[from:], suffix)
+		if i < 0 {
+			return ""
+		}
+		end := from + i + len(suffix)
+		if end == len(cmd) || cmd[end] == '/' {
+			return cmd[:end]
+		}
+		from = from + i + 1
+	}
+	return ""
 }

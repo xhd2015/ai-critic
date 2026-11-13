@@ -6,10 +6,23 @@ import { NavTabs } from '../types';
 import { fetchProcesses, type HostProcess, type ProcessSnapshot } from '../../../api/processes';
 import { fetchDisk, type DiskSnapshot } from '../../../api/disk';
 import { filterProcesses, orderedPids, type ProcessFilter, type ProcessSort } from './groupProcesses';
+import {
+    APP_SORTS,
+    applyLockedAppOrder,
+    filterApps,
+    orderedAppPaths,
+    sortApps,
+    type AppSort,
+} from './appFilters';
 import { SystemSummary } from './SystemSummary';
 import { SystemProcessList } from './SystemProcessList';
+import { AppList } from './AppList';
 import { SystemKillModal } from './SystemKillModal';
+import { useApps } from './useApps';
 import './SystemView.css';
+
+/** Either a process filter, or the installed-apps view. */
+type ViewMode = ProcessFilter | 'apps';
 
 export function SystemView() {
     const navigate = useNavigate();
@@ -20,7 +33,11 @@ export function SystemView() {
     const [paused, setPaused] = useState(false);
     const [query, setQuery] = useState('');
     const [sort, setSort] = useState<ProcessSort>('cpu');
-    const [filter, setFilter] = useState<ProcessFilter>('all');
+    const [filter, setFilter] = useState<ViewMode>('all');
+    const [appSort, setAppSort] = useState<AppSort>('cpu');
+    const [showSystem, setShowSystem] = useState(false);
+    const [lockedApps, setLockedApps] = useState<string[] | null>(null);
+    const [appsNonce, setAppsNonce] = useState(0);
     const [target, setTarget] = useState<HostProcess | null>(null);
     const [lockedPids, setLockedPids] = useState<number[] | null>(null);
     const [disk, setDisk] = useState<DiskSnapshot | null>(null);
@@ -76,7 +93,16 @@ export function SystemView() {
         };
     }, [paused]);
 
-    const visible = data ? filterProcesses(data.processes, query, filter) : [];
+    const appsActive = filter === 'apps';
+    const { view: appsView, error: appsError } = useApps(appsActive, paused, appsNonce);
+
+    const visible = data && !appsActive ? filterProcesses(data.processes, query, filter) : [];
+    const allApps = appsView?.apps ?? [];
+    const visibleApps = applyLockedAppOrder(
+        sortApps(filterApps(allApps, query, showSystem), appSort),
+        lockedApps,
+    );
+    const systemApps = allApps.filter(app => app.system).length;
 
     return (
         <div className="mcc-system">
@@ -119,33 +145,67 @@ export function SystemView() {
                         <input
                             className="mcc-system-search"
                             type="search"
-                            placeholder="Filter by name, pid, command…"
+                            placeholder={
+                                appsActive
+                                    ? 'Filter by app name, version, bundle id…'
+                                    : 'Filter by name, pid, command…'
+                            }
                             value={query}
                             onChange={e => setQuery(e.target.value)}
                         />
                         <div className="mcc-system-chips">
-                            {([
-                                ['cpu', 'CPU ↓'],
-                                ['mem', 'Memory'],
-                                ['name', 'Name'],
-                                ['pid', 'PID'],
-                            ] as const).map(([id, label]) => (
-                                <button
-                                    key={id}
-                                    type="button"
-                                    className={`mcc-system-chip${sort === id && !lockedPids ? ' on' : ''}`}
-                                    onClick={() => {
-                                        setLockedPids(null);
-                                        setSort(id);
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                            {appsActive ? (
+                                <>
+                                    {APP_SORTS.map(([id, label]) => (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            className={`mcc-system-chip${appSort === id && !lockedApps ? ' on' : ''}`}
+                                            onClick={() => {
+                                                setLockedApps(null);
+                                                setAppSort(id);
+                                            }}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="mcc-system-chip off"
+                                        disabled
+                                        title="Apps aggregate processes per application, so PID order does not apply"
+                                    >
+                                        PID
+                                    </button>
+                                </>
+                            ) : (
+                                ([
+                                    ['cpu', 'CPU ↓'],
+                                    ['mem', 'Memory'],
+                                    ['name', 'Name'],
+                                    ['pid', 'PID'],
+                                ] as const).map(([id, label]) => (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        className={`mcc-system-chip${sort === id && !lockedPids ? ' on' : ''}`}
+                                        onClick={() => {
+                                            setLockedPids(null);
+                                            setSort(id);
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                ))
+                            )}
                             <button
                                 type="button"
-                                className={`mcc-system-chip${lockedPids ? ' on' : ''}`}
+                                className={`mcc-system-chip${(appsActive ? lockedApps : lockedPids) ? ' on' : ''}`}
                                 onClick={() => {
+                                    if (appsActive) {
+                                        setLockedApps(cur => (cur ? null : orderedAppPaths(visibleApps)));
+                                        return;
+                                    }
                                     if (lockedPids) {
                                         setLockedPids(null);
                                         return;
@@ -153,12 +213,13 @@ export function SystemView() {
                                     setLockedPids(orderedPids(visible, sort));
                                 }}
                             >
-                                {lockedPids ? 'Unlock order' : 'Lock order'}
+                                {(appsActive ? lockedApps : lockedPids) ? 'Unlock order' : 'Lock order'}
                             </button>
                         </div>
                         <div className="mcc-system-chips">
                             {([
                                 ['all', 'All'],
+                                ['apps', 'Apps'],
                                 ['mine', 'Mine'],
                                 ['stale', 'Stale / tunnels'],
                             ] as const).map(([id, label]) => (
@@ -171,20 +232,40 @@ export function SystemView() {
                                     {label}
                                 </button>
                             ))}
+                            {appsActive && (
+                                <button
+                                    type="button"
+                                    className={`mcc-system-chip${showSystem ? ' on' : ''}`}
+                                    onClick={() => setShowSystem(v => !v)}
+                                    title="Bundles under /System/Applications"
+                                >
+                                    {`System apps${systemApps ? ` · ${systemApps}` : ''}`}
+                                </button>
+                            )}
                         </div>
                     </div>
-                    {lockedPids && (
+                    {(lockedPids || lockedApps) && (
                         <div className="mcc-system-alert" style={{ marginTop: 0 }}>
                             Order locked · numbers still update · lost on refresh
                         </div>
                     )}
-                    <SystemProcessList
-                        processes={visible}
-                        sort={sort}
-                        lockedPids={lockedPids}
-                        onKill={setTarget}
-                        onOpen={proc => navigate(`pid/${proc.pid}`, { relative: 'path' })}
-                    />
+                    {appsActive ? (
+                        <AppList
+                            apps={visibleApps}
+                            loading={appsView == null}
+                            error={appsError}
+                            onKill={setTarget}
+                            onOpen={proc => navigate(`pid/${proc.pid}`, { relative: 'path' })}
+                        />
+                    ) : (
+                        <SystemProcessList
+                            processes={visible}
+                            sort={sort}
+                            lockedPids={lockedPids}
+                            onKill={setTarget}
+                            onOpen={proc => navigate(`pid/${proc.pid}`, { relative: 'path' })}
+                        />
+                    )}
                 </>
             )}
             {target && (
@@ -194,6 +275,7 @@ export function SystemView() {
                     onKilled={() => {
                         setTarget(null);
                         fetchProcesses().then(setData).catch(() => {});
+                        setAppsNonce(n => n + 1);
                     }}
                 />
             )}

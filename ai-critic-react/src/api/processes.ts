@@ -28,6 +28,7 @@ export interface HostProcess {
     ppid: number;
     name: string;
     cmd: string;
+    bundle_path?: string;
     user: string;
     state: string;
     cpu_percent: number;

@@ -56,6 +56,7 @@ type Process struct {
 	PPID       int      `json:"ppid"`
 	Name       string   `json:"name"`
 	Cmd        string   `json:"cmd"`
+	BundlePath string   `json:"bundle_path,omitempty"`
 	User       string   `json:"user"`
 	State      string   `json:"state"`
 	CPUPercent float64  `json:"cpu_percent"`
