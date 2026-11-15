@@ -9,11 +9,11 @@ import {
     deltaTone,
     duration,
     fileCount,
-    priorityComplete,
     reclaimableTotal,
     shortWhen,
     signedBytes,
 } from './spaceTone';
+import { partialNote, priorityComplete } from './spaceCoverageTone';
 import './SystemView.css';
 import './SpaceAnalysis.css';
 
@@ -104,7 +104,8 @@ export default function SpaceHistoryView() {
                                 <div className="mcc-space-hist-when">{shortWhen(report.scanned_at)}</div>
                                 <div className="mcc-space-hist-meta">
                                     {duration(report.scan_ms)} · {fileCount(report.files)}
-                                    {!priorityComplete(report) ? ' · partial' : report.entries_dropped ? ' · detail trimmed' : ''}
+                                    {partialNote(report)}
+                                    {priorityComplete(report) && report.entries_dropped ? ' · detail trimmed' : ''}
                                 </div>
                             </div>
                             {values.length > 1 && <SpaceSparkline values={values} />}

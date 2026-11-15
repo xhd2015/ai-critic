@@ -1,6 +1,9 @@
 package diskmon
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -148,6 +151,9 @@ func (a *scanAccumulator) scanDirWithin(task *dirTask) {
 	if a.expired() {
 		return
 	}
+	a.mu.Lock()
+	task.node.started = true
+	a.mu.Unlock()
 	a.setPhase(task.node.path)
 
 	entries, err, ok := a.readDir(task.node.path)
@@ -156,7 +162,15 @@ func (a *scanAccumulator) scanDirWithin(task *dirTask) {
 		return
 	}
 	if err != nil {
-		a.settle(task.node, 0, 0, nil, nil, os.IsPermission(err), task.priority)
+		// The directory is missing from the totals, so the report names it and
+		// says why. Without this the only trace was a bare no_access counter and
+		// the page could not explain a single one of its skipped folders.
+		kind := SkipIO
+		if os.IsPermission(err) {
+			kind = SkipPermission
+		}
+		skip := a.newSkip(a.class.logical(task.node.path), kind, readReason(err))
+		a.settle(task.node, 0, 0, nil, []SkippedPath{skip}, os.IsPermission(err), task.priority)
 		return
 	}
 
@@ -238,19 +252,25 @@ func (a *scanAccumulator) stall(node *scanNode) {
 // parent can still finish. It is idempotent: a directory is abandoned at most
 // once, and a late settle from the stuck goroutine sees the flag and does
 // nothing.
+//
+// A directory whose listing already completed is never abandoned. The watchdog
+// polls on a ticker, so it can decide a directory stalled in the same instant
+// that the directory finished; dropping it then would consume its completion a
+// second time and leave the parent counting work that no longer exists.
 func (a *scanAccumulator) abandon(node *scanNode) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if node.abandoned {
+	if node.abandoned || node.settled {
 		return
 	}
 	node.abandoned = true
 	// It holds no bytes, so it must never show up as one of the biggest folders.
 	node.record = false
-	a.settleLocked(node, 0, 0, nil, []SkippedPath{{
-		Path:   shortenHome(a.class.logical(node.path), a.cfg.Home),
-		Reason: "read timed out",
-	}}, false, false)
+	a.settleLocked(node, 0, 0, nil, []SkippedPath{
+		// The path is recorded before the walk away: nothing else will ever
+		// describe this directory.
+		a.newSkip(a.class.logical(node.path), SkipTimeout, fmt.Sprintf("operation timed out after %s", dirReadTimeout)),
+	}, false, false)
 }
 
 // scanDir lists one directory, accounts for the files directly inside it, and
@@ -275,12 +295,9 @@ func (a *scanAccumulator) scanEntries(task *dirTask, entries []os.DirEntry, tick
 		if entry.IsDir() {
 			path := filepath.Join(node.path, entry.Name())
 			logical := a.class.logical(path)
-			if reason, skip := a.skipDir(logical, entry.Name()); skip {
+			if kind, reason, skip := a.skipDir(logical, entry.Name()); skip {
 				if reason != "" {
-					skipped = append(skipped, SkippedPath{
-						Path:   shortenHome(logical, a.cfg.Home),
-						Reason: reason,
-					})
+					skipped = append(skipped, a.newSkip(logical, kind, reason))
 				}
 				continue
 			}
@@ -337,6 +354,9 @@ func (a *scanAccumulator) settle(
 }
 
 // settleLocked publishes one directory with the accumulator lock already held.
+// A directory is published once. The watchdog and the worker that lists a
+// directory can both arrive here for the same node, and publishing twice would
+// count its bytes twice and decrement its parent's counter twice.
 func (a *scanAccumulator) settleLocked(
 	node *scanNode,
 	dirSize, dirFiles int64,
@@ -344,15 +364,20 @@ func (a *scanAccumulator) settleLocked(
 	skipped []SkippedPath,
 	noAccess, priority bool,
 ) {
+	if node.settled {
+		return
+	}
+	node.settled = true
 	a.files += dirFiles
 	if noAccess {
 		a.noAccess++
 	}
 	for _, skip := range skipped {
-		if a.skippedAt[skip.Path] {
+		key := skip.Kind + "\x00" + skip.Path
+		if a.skippedAt[key] {
 			continue
 		}
-		a.skippedAt[skip.Path] = true
+		a.skippedAt[key] = true
 		a.skipped = append(a.skipped, skip)
 	}
 	if dirSize > 0 {
@@ -386,14 +411,15 @@ func (a *scanAccumulator) settleLocked(
 // subtrees upwards. It runs under the accumulator lock and walks up the tree
 // iteratively: depths here can exceed a hundred, and each level only costs a
 // decrement.
+//
+// An abandoned directory is folded like any other. Abandoning a directory only
+// settles its own listing; the children it handed to the queue before it stalled
+// are still out there and each of them completes exactly once. Stopping the walk
+// at the abandoned node would leave its parent's counter above zero forever,
+// which is how a scan that finished inside its budget could still report a
+// priority root as only partly read.
 func (a *scanAccumulator) completeLocked(node *scanNode) {
-	start := node
 	for node != nil {
-		if node.abandoned && node != start {
-			// The directory was already settled with no bytes when it stalled;
-			// a descendant draining into it later must not fold twice.
-			return
-		}
 		node.pending--
 		if node.pending > 0 {
 			return
@@ -408,19 +434,40 @@ func (a *scanAccumulator) completeLocked(node *scanNode) {
 	}
 }
 
-// skipDir reports whether a subdirectory must be left alone. A reason is only
-// returned for skips that cost coverage and are worth telling the user about.
-func (a *scanAccumulator) skipDir(logical, name string) (string, bool) {
+// skipDir reports whether a subdirectory must be left alone, and under which
+// kind. Everything here is by design: the scan chose not to look, rather than
+// the filesystem refusing. A reason is only returned for skips that cost
+// coverage and are worth telling the user about.
+func (a *scanAccumulator) skipDir(logical, name string) (kind, reason string, skip bool) {
 	if skipDirNames[name] {
-		return "", true
+		return SkipByDesign, "", true
 	}
 	if reason, ok := skipPaths[logical]; ok {
-		return reason, true
+		return SkipByDesign, reason, true
 	}
 	if isCloudDrive(logical) {
-		return "cloud drive", true
+		return SkipByDesign, "cloud drive", true
 	}
-	return "", false
+	return "", "", false
+}
+
+// newSkip builds the report row for one directory the walk did not count. The
+// path is shortened the same way entries are, so the page reads in one space,
+// and the depth is stored because grouping folds by prefix.
+func (a *scanAccumulator) newSkip(logical, kind, reason string) SkippedPath {
+	path := shortenHome(logical, a.cfg.Home)
+	return SkippedPath{Path: path, Kind: kind, Reason: reason, Depth: segments(path)}
+}
+
+// readReason keeps the errno text and drops the path the error repeats: the
+// report already carries the path in its own field, and "operation not
+// permitted" is the part the user recognizes.
+func readReason(err error) string {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) && pathErr.Err != nil {
+		return pathErr.Err.Error()
+	}
+	return err.Error()
 }
 
 // withinRoots keeps priority seeding inside the mount actually being scanned,

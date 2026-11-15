@@ -9,11 +9,11 @@ import {
     categoryBytes,
     deltaTone,
     percentOf,
-    priorityComplete,
     reclaimableTotal,
     shortWhen,
     signedBytes,
 } from './spaceTone';
+import { partialNote } from './spaceCoverageTone';
 import './SystemView.css';
 import './SpaceAnalysis.css';
 
@@ -150,7 +150,7 @@ export default function SpaceTrendView() {
                                     <div className="mcc-space-hist-when">{shortWhen(report.scanned_at)}</div>
                                     <div className="mcc-space-hist-meta">
                                         report {report.id}
-                                        {!priorityComplete(report) ? ' · partial' : ''}
+                                        {partialNote(report)}
                                     </div>
                                 </div>
                                 <div className="mcc-space-hist-right">

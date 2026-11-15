@@ -1,5 +1,5 @@
 import { formatBytes } from '../../../api/processes';
-import type { AnalysisCoverage, AnalysisReport } from '../../../api/diskAnalysis';
+import type { AnalysisReport } from '../../../api/diskAnalysis';
 
 /** Stable per-category colours; ids come from the server and never change. */
 const CATEGORY_COLORS: Record<string, string> = {
@@ -59,7 +59,11 @@ export function clockTime(iso: string | undefined): string {
 export function duration(ms: number): string {
     if (!ms || ms < 0) return '—';
     if (ms < 1000) return `${ms} ms`;
-    return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
+    // A budget-bound walk runs for minutes; "602 s" is a number to convert,
+    // "10m 2s" is one to read.
+    const sec = Math.round(ms / 1000);
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }
 
 export function fileCount(files: number): string {
@@ -108,29 +112,4 @@ export function sortedCategories(summary: Rollup | null | undefined) {
         .filter(c => c.bytes > 0)
         .slice()
         .sort((a, b) => b.bytes - a.bytes);
-}
-
-type Covered = Pick<AnalysisReport, 'coverage'>;
-
-/**
- * True when every important folder the server knows about finished reading.
- * Reports written before the coverage field existed fall back to `complete`,
- * which is what the old scanner meant by it.
- */
-export function priorityComplete(summary: (Covered & { complete?: boolean }) | null | undefined): boolean {
-    const coverage: AnalysisCoverage | undefined = summary?.coverage;
-    if (!coverage) return Boolean(summary?.complete);
-    const roots = coverage.priority_roots?.length ?? 0;
-    if (roots === 0) return Boolean(summary?.complete);
-    if (typeof coverage.priority_complete === 'boolean') return coverage.priority_complete;
-    return coverage.priority_scanned >= roots;
-}
-
-/** The mounts the walk refused to enter, as one muted footnote line. */
-export function skippedNote(summary: Covered | null | undefined, limit = 3): string {
-    const skipped = summary?.coverage?.skipped ?? [];
-    if (skipped.length === 0) return '';
-    const shown = skipped.slice(0, limit).map(s => (s.reason ? `${s.path} (${s.reason})` : s.path));
-    const rest = skipped.length - shown.length;
-    return `not counted: ${shown.join(' · ')}${rest > 0 ? ` · +${rest} more` : ''}`;
 }

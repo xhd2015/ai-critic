@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>System · Disk：partial 可解释化 + 预算 10 分钟 mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --amber: #f59e0b; --red: #f87171;
+    --violet: #a78bfa; --cyan: #22d3ee; --pink: #f472b6;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 2260px; margin: 0 auto; padding: 24px 18px 72px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 1050px; line-height: 1.7; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 20px; max-width: 1500px; line-height: 1.7; }
+  .assump b { color: var(--text); }
+  .frames { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .frame { width: 390px; }
+  .phone {
+    width: 390px; min-height: 844px; background: var(--bg); border-radius: 36px;
+    border: 8px solid #020617; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; flex-shrink: 0; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  .phone.stage { height: 844px; }
+  .caption { font-size: 12px; color: var(--mut); margin: 8px 0 0; max-width: 390px; line-height: 1.6; }
+  .caption b { color: #cbd5e1; }
+  .caption code { font-family: var(--mono); font-size: 11px; color: #cbd5e1; }
+
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .proj { flex: 1; background: rgba(0,0,0,.22); border: 1px solid var(--bd); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .content { flex: 1; overflow: visible; min-height: 0; }
+  .phone.stage .content { overflow: hidden; }
+  .page { padding: 12px 14px 28px; }
+  .page-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .page-h h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn { width: 30px; height: 30px; border: 0; background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; font-size: 18px; padding: 0; }
+  .live { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--green); font-weight: 700; }
+  .live::before { content: ""; width: 6px; height: 6px; border-radius: 99px; background: currentColor; }
+  .chip { border: 1px solid var(--bd); background: transparent; color: var(--sec); font-size: 12px; font-weight: 650; padding: 5px 9px; border-radius: 999px; cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .chip.on { background: rgba(96,165,250,.12); color: var(--blue); border-color: rgba(96,165,250,.4); }
+  .chip.clean { background: rgba(34,197,94,.12); color: #86efac; border-color: rgba(34,197,94,.4); }
+  .sub { font-size: 12px; color: var(--sec); margin: 0 0 10px; }
+
+  /* ---------- report card ---------- */
+  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 12px; padding: 12px; }
+  .card-head { display: flex; gap: 10px; align-items: flex-start; }
+  .card-title { font-size: 12.5px; font-weight: 700; }
+  .meta { font-size: 10px; color: var(--mut); margin-top: 2px; line-height: 1.5; }
+  .badges { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 190px; }
+  .bdg {
+    font-size: 9px; font-weight: 650; color: #94a3b8; border: 1px solid #334155;
+    border-radius: 999px; padding: 1px 6px; white-space: nowrap; background: transparent;
+    font-family: inherit; line-height: 1.6;
+  }
+  .bdg.warn { color: var(--amber); border-color: #4a3a16; background: rgba(245,158,11,.07); }
+  .bdg.tap { cursor: pointer; }
+  .bdg.tap::after { content: " ›"; opacity: .65; }
+  .bdg.info { color: #94a3b8; border-color: #334155; }
+
+  .stack { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: #0b1220; gap: 1px; margin-top: 10px; }
+  .stack > i { display: block; height: 100%; }
+  .c-dev { background: #60a5fa; } .c-vm { background: #a78bfa; } .c-cache { background: #22d3ee; }
+  .c-down { background: #22c55e; } .c-log { background: #fbbf24; } .c-other { background: #475569; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; }
+  .lg { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--sec); }
+  .lg i { width: 7px; height: 7px; border-radius: 2px; display: block; }
+  .lg b { color: var(--text); font-weight: 650; }
+
+  .reclaim { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #263449; }
+  .rv { font-size: 14px; font-weight: 750; }
+  .rl { font-size: 9.5px; color: var(--mut); margin-top: 2px; line-height: 1.5; }
+  .btn { margin-left: auto; border: 1px solid rgba(96,165,250,.4); background: rgba(96,165,250,.12); color: var(--blue); font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+
+  /* ---------- NEW: coverage line + panel ---------- */
+  .cov-line {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    margin-top: 10px; padding: 7px 9px; border-radius: 8px;
+    background: rgba(148,163,184,.06); border: 1px solid #2a3a52;
+    color: var(--sec); font-size: 10.5px; font-family: inherit; text-align: left; cursor: pointer;
+  }
+  .cov-line .dot { width: 6px; height: 6px; border-radius: 99px; background: var(--amber); flex-shrink: 0; }
+  .cov-line .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cov-line .t b { color: #e2e8f0; font-weight: 700; }
+  .cov-line .more { color: var(--blue); font-weight: 650; flex-shrink: 0; }
+  .cov-line.open { border-color: rgba(96,165,250,.45); }
+
+  .cov-panel { margin-top: 8px; border: 1px solid #2a3a52; border-radius: 10px; overflow: hidden; background: rgba(2,6,23,.35); }
+  .cov-why { padding: 9px 10px; font-size: 10.5px; color: #cbd5e1; line-height: 1.65; border-bottom: 1px solid #1e293b; }
+  .cov-why b { color: var(--amber); }
+  .cov-why code { font-family: var(--mono); font-size: 10px; color: #e2e8f0; }
+
+  .grow { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #17233a; align-items: flex-start; }
+  .grow:last-child { border-bottom: 0; }
+  .gmain { flex: 1; min-width: 0; }
+  .gpath { font-family: var(--mono); font-size: 10.5px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gex { font-family: var(--mono); font-size: 9px; color: var(--mut); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gright { text-align: right; flex-shrink: 0; }
+  .gcount { font-size: 12px; font-weight: 750; color: #e2e8f0; }
+  .gcount small { font-size: 9px; font-weight: 600; color: var(--mut); }
+  .tagk { display: inline-block; font-size: 8.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-top: 3px; white-space: nowrap; }
+  .k-perm  { color: #fca5a5; background: rgba(248,113,113,.13); }
+  .k-time  { color: #fcd34d; background: rgba(251,191,36,.13); }
+  .k-io    { color: #fdba74; background: rgba(249,115,22,.13); }
+  .k-byconf{ color: #94a3b8; background: rgba(148,163,184,.12); }
+
+  .cov-foot { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid #1e293b; }
+  .cov-foot .note { font-size: 9.5px; color: var(--mut); flex: 1; line-height: 1.5; }
+  .cov-foot .btn { padding: 4px 8px; font-size: 10px; }
+
+  /* ---------- progress ---------- */
+  .progcard { background: var(--card); border: 1px solid var(--bd); border-radius: 12px; padding: 12px; }
+  .ptitle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; }
+  .ptitle .pct { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--sec); font-weight: 600; }
+  .pbar { height: 6px; border-radius: 99px; background: #0b1220; overflow: hidden; margin: 10px 0 6px; }
+  .pbar > i { display: block; height: 100%; background: linear-gradient(90deg, #60a5fa, #22d3ee); }
+  .prow { display: flex; gap: 8px; font-size: 10px; color: var(--mut); line-height: 1.6; }
+  .prow .k { color: var(--sec); }
+  .prow .v { margin-left: auto; font-family: var(--mono); color: #e2e8f0; }
+  .pivot { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 10px; line-height: 1.6; }
+  .pivot.ok { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.28); color: #bbf7d0; }
+  .pivot.warn { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.28); color: #fde68a; }
+
+  /* ---------- sheet ---------- */
+  .scrim { position: absolute; inset: 0; background: rgba(2,6,23,.66); z-index: 5; }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+    background: #131c30; border-top: 1px solid var(--bd);
+    border-radius: 18px 18px 0 0; max-height: 88%; display: flex; flex-direction: column;
+    box-shadow: 0 -18px 40px rgba(0,0,0,.5);
+  }
+  .sheet-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid #1e293b; }
+  .sheet-head h3 { margin: 0; font-size: 15px; font-weight: 750; }
+  .sheet-meta { margin-top: 3px; font-size: 10px; color: var(--mut); line-height: 1.55; }
+  .sheet-body { overflow: auto; padding: 10px 14px 14px; }
+  .sheet-sect { font-size: 9px; letter-spacing: .08em; font-weight: 750; color: var(--mut); margin: 12px 0 6px; }
+  .sheet-sect:first-child { margin-top: 2px; }
+
+  .stopbox { background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.22); border-radius: 10px; padding: 10px; font-size: 10.5px; color: #fde68a; line-height: 1.65; }
+  .stopbox b { color: #fef3c7; }
+  .rootrow { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--sec); padding: 5px 0; border-bottom: 1px solid #182238; }
+  .rootrow:last-child { border-bottom: 0; }
+  .rootrow .p { font-family: var(--mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e2e8f0; }
+  .rootrow .st { font-size: 9px; font-weight: 700; }
+  .st.ok { color: var(--green); } .st.no { color: var(--amber); }
+
+  .hint { margin-top: 10px; background: rgba(96,165,250,.08); border: 1px solid rgba(96,165,250,.26); border-radius: 10px; padding: 9px 10px; font-size: 10px; color: #bfdbfe; line-height: 1.65; }
+  .hint b { color: #dbeafe; }
+  .hint code { font-family: var(--mono); font-size: 9.5px; }
+
+  .sheet-actions { display: flex; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid #1e293b; }
+  .sheet-actions .btn { margin: 0; flex: 1; text-align: center; padding: 9px; font-size: 12px; }
+  .btn.ghost { border-color: var(--bd); background: transparent; color: var(--sec); }
+
+  /* ---------- history rows ---------- */
+  .hist { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .hist .row1 { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; }
+  .hist .row1 .id { font-family: var(--mono); font-size: 11px; }
+  .hist .row1 .b { margin-left: auto; }
+  .hist .row2 { font-size: 10px; color: var(--mut); margin-top: 3px; line-height: 1.55; }
+  .hist .row2 code { font-family: var(--mono); font-size: 9.5px; }
+
+  .notes { margin-top: 28px; background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px 18px; max-width: 1560px; }
+  .notes h2 { margin: 0 0 8px; font-size: 15px; }
+  .notes h3 { margin: 20px 0 6px; font-size: 13px; color: #e2e8f0; }
+  .notes ul, .notes ol { margin: 0; padding-left: 18px; color: var(--sec); font-size: 13px; line-height: 1.7; }
+  .notes li { margin: 6px 0; }
+  .notes p { color: var(--sec); font-size: 13px; line-height: 1.7; }
+  .notes code { font-family: var(--mono); font-size: 12px; color: #cbd5e1; }
+  .notes table { border-collapse: collapse; font-size: 12.5px; color: var(--sec); margin-top: 6px; width: 100%; max-width: 1400px; }
+  .notes th { text-align: left; color: var(--text); font-weight: 650; padding: 6px 12px 6px 0; border-bottom: 1px solid #1f2937; white-space: nowrap; }
+  .notes td { padding: 6px 12px 6px 0; border-bottom: 1px solid #172033; vertical-align: top; }
+  .notes pre { background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 12px; overflow: auto; font-family: var(--mono); font-size: 11.5px; color: #cbd5e1; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>System · Disk：把 <code>partial</code> 讲清楚 + 扫描预算提到 10 分钟</h1>
+  <p class="lead">
+    今天这个页面在真机上永远是 <b>partial</b> + <b>time budget</b>，脚注只有一行
+    <code>~/Library/Containers (read timed out) · ~/Library/Group Containers (read timed out) · /home (autofs mount)</code>，
+    而头部同时写着 <b>432 dirs skipped</b> —— 这两个数字既不相等也不互相解释：
+    <code>432</code> 是 <code>no_access_dirs</code>（权限错误，<b>完全没有记录路径</b>），
+    <code>308</code> 是 <code>skipped</code>（只有超时 + 挂载点两类）。
+    所以"为什么 partial"今天在数据层就是不可回答的，不是 UI 排版问题。
+    <br>本稿做两件事：<b>①</b> 把 <code>scanBudget</code> 从 300 s 提到 600 s；
+    <b>②</b> 让 partial 变成一个可以点开、能列出"哪些目录没扫到、具体什么错误"的面板，
+    并且服务端<b>按前缀归并</b>（308 条原始记录 → 5 组），只保留最有意义的那些。
+  </p>
+
+  <div class="assump">
+    <b>三个前提（请在 Decisions 里确认）</b><br>
+    ① <b>partial 只表示"核心目录没走完"</b>，不再兼职表示"有目录读不到"。后者是一个<b>始终存在</b>的独立事实（权限、超时、按设计跳过的挂载点），用独立的
+    <code>N folders not counted</code> 入口暴露；这样预算提到 10 分钟后 partial 有机会变成 <code>core folders scanned</code>，
+    而"还有 490 个目录读不到"仍然诚实地摆在那里。<br>
+    ② <b>无路径 = 不可解释</b>：<code>analysis_scan_queue.go:159</code> 目前只 <code>settle(..., noAccess=true, skipped=nil)</code> 就完事，权限错误连路径都不留。
+    这轮必须把每一条都记成 <code>SkippedPath{path, kind, reason}</code>，否则 UI 再怎么排版都是空的。<br>
+    ③ <b>归并在服务端做</b>，随报告一起落库（<code>coverage.skip_groups</code>），CLI / Web / 历史报告共用同一份口径；原始明细封顶保留，不随报告体积线性增长。<br>
+    下面所有数字取自真机报告量级（<code>20261114-203720</code>：300 s、9.79M 文件、401 GB / 459.8 GB、priority 3/6、no_access 432、skipped 308），个别项做了示意。
+  </div>
+
+  <div class="frames">
+
+    <!-- ============ A: 折叠态 ============ -->
+    <div class="frame">
+      <div class="phone">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>Space analysis</h2>
+              <button class="chip">History 8</button>
+              <button class="chip clean">Clear 3.2 GB</button>
+              <button class="chip on">Scan</button>
+            </div>
+            <div class="sub">last completed 2 min ago · 8 reports stored</div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Report 20261115-011830</div>
+                  <div class="meta">2 min ago · 10m 0s · 11.2M files<br>10 min budget used</div>
+                </div>
+                <div class="badges">
+                  <button class="bdg warn tap" title="4 of 6 core folders finished">partial · 4/6</button>
+                  <button class="bdg info tap">490 not counted</button>
+                </div>
+              </div>
+
+              <div class="stack">
+                <i class="c-dev" style="width:36%"></i>
+                <i class="c-vm" style="width:1.5%"></i>
+                <i class="c-cache" style="width:16%"></i>
+                <i class="c-down" style="width:3%"></i>
+                <i class="c-log" style="width:1%"></i>
+                <i class="c-other" style="width:42.5%"></i>
+              </div>
+              <div class="legend">
+                <span class="lg"><i class="c-dev"></i>Dev cache <b>162 GB</b></span>
+                <span class="lg"><i class="c-vm"></i>Containers <b>6.8 GB</b></span>
+                <span class="lg"><i class="c-cache"></i>App caches <b>72 GB</b></span>
+                <span class="lg"><i class="c-down"></i>Downloads <b>13 GB</b></span>
+                <span class="lg"><i class="c-log"></i>Logs <b>4.5 GB</b></span>
+                <span class="lg"><i class="c-other"></i>Everything else <b>192 GB</b></span>
+              </div>
+
+              <div class="reclaim">
+                <div>
+                  <div class="rv">≈ 3.2 GB can be cleared</div>
+                  <div class="rl">measured per cleanup class, not by path prefix · 452 GB walked of 460 GB used</div>
+                </div>
+                <button class="btn">Preview ›</button>
+              </div>
+
+              <!-- NEW: 一行可解释入口，默认折叠 -->
+              <button class="cov-line">
+                <span class="dot"></span>
+                <span class="t"><b>490 folders not counted</b> · 8 groups · stopped at 10:00</span>
+                <span class="more">Why ›</span>
+              </button>
+            </div>
+
+            <div class="sub" style="margin-top:14px">Badge 与入口的分工见右图：<b>partial</b> 只答"核心目录走完没有"，<b>not counted</b> 只答"哪些目录读不到"。</div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>A · 折叠态（默认）</b>：<code>partial · 4/6</code> 直接给出分子分母，鼠标/手指不需要再猜；<code>490 not counted</code> 取代原来含糊的 <code>432 dirs skipped</code>（数字口径统一为"所有没读到的目录"，含权限+超时+按设计跳过）。脚注从三行 path 拼接变成一条可点入口。</p>
+    </div>
+
+    <!-- ============ B: 卡内展开 ============ -->
+    <div class="frame">
+      <div class="phone">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>Space analysis</h2>
+              <button class="chip">History 8</button>
+              <button class="chip clean">Clear 3.2 GB</button>
+              <button class="chip on">Scan</button>
+            </div>
+            <div class="sub">last completed 2 min ago · 8 reports stored</div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Report 20261115-011830</div>
+                  <div class="meta">2 min ago · 10m 0s · 11.2M files<br>10 min budget used</div>
+                </div>
+                <div class="badges">
+                  <button class="bdg warn tap">partial · 4/6</button>
+                  <button class="bdg info tap">490 not counted</button>
+                </div>
+              </div>
+
+              <div class="stack">
+                <i class="c-dev" style="width:36%"></i>
+                <i class="c-vm" style="width:1.5%"></i>
+                <i class="c-cache" style="width:16%"></i>
+                <i class="c-down" style="width:3%"></i>
+                <i class="c-log" style="width:1%"></i>
+                <i class="c-other" style="width:42.5%"></i>
+              </div>
+
+              <div class="reclaim">
+                <div>
+                  <div class="rv">≈ 3.2 GB can be cleared</div>
+                  <div class="rl">452 GB walked of 460 GB used</div>
+                </div>
+                <button class="btn">Preview ›</button>
+              </div>
+
+              <button class="cov-line open">
+                <span class="dot"></span>
+                <span class="t"><b>490 folders not counted</b> · 8 groups</span>
+                <span class="more">Hide ⌃</span>
+              </button>
+
+              <div class="cov-panel">
+                <div class="cov-why">
+                  Stopped at the <b>10 min</b> budget. <code>~/Library/Developer</code> and
+                  <code>/Applications</code> were not finished, so this report is a
+                  <b>lower bound</b> for those paths.
+                </div>
+
+                <div class="grow">
+                  <div class="gmain">
+                    <div class="gpath">~/Library/Containers</div>
+                    <div class="gex">e.g. ~/Library/Containers/com.apple.mail/Data</div>
+                  </div>
+                  <div class="gright">
+                    <div class="gcount">283 <small>dirs</small></div>
+                    <span class="tagk k-time">timed out · 1 s</span>
+                  </div>
+                </div>
+
+                <div class="grow">
+                  <div class="gmain">
+                    <div class="gpath">~/Library/Application Support</div>
+                    <div class="gex">e.g. ~/Library/Application Support/MobileSync</div>
+                  </div>
+                  <div class="gright">
+                    <div class="gcount">96 <small>dirs</small></div>
+                    <span class="tagk k-perm">permission</span>
+                  </div>
+                </div>
+
+                <div class="grow">
+                  <div class="gmain">
+                    <div class="gpath">/private/var/folders</div>
+                    <div class="gex">e.g. /private/var/folders/2k/…/C/com.apple.Safari</div>
+                  </div>
+                  <div class="gright">
+                    <div class="gcount">38 <small>dirs</small></div>
+                    <span class="tagk k-perm">permission</span>
+                  </div>
+                </div>
+
+                <div class="grow">
+                  <div class="gmain">
+                    <div class="gpath">~/Library/Group Containers</div>
+                    <div class="gex">e.g. ~/Library/Group Containers/group.com.apple.notes</div>
+                  </div>
+                  <div class="gright">
+                    <div class="gcount">24 <small>dirs</small></div>
+                    <span class="tagk k-time">timed out · 1 s</span>
+                  </div>
+                </div>
+
+                <div class="cov-foot">
+                  <div class="note">4 more groups (49 dirs) · 2 by design</div>
+                  <button class="btn">All groups ›</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>B · 卡内展开（3 行 + 更多）</b>：只显示<b>前缀归并后</b>的组，按"可操作性 × 数量"排序；每组一行 = 前缀（等宽）+ 一个示例路径 + 数量 + 原因标签。默认只展开 4 组，其余折叠成一行 <code>5 more groups (61 dirs)</code> —— 这就是"根据前缀保留最有意义的"落地形态：308 条明细变成 8 组、默认只显示 4 行。</p>
+    </div>
+
+    <!-- ============ C: 完整 sheet ============ -->
+    <div class="frame">
+      <div class="phone stage">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>Space analysis</h2>
+              <button class="chip">History 8</button>
+              <button class="chip clean">Clear 3.2 GB</button>
+              <button class="chip on">Scan</button>
+            </div>
+            <div class="sub">last completed 2 min ago · 8 reports stored</div>
+            <div class="card" style="opacity:.35">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Report 20261115-011830</div>
+                  <div class="meta">2 min ago · 10m 0s · 11.2M files</div>
+                </div>
+                <div class="badges">
+                  <button class="bdg warn tap">partial · 4/6</button>
+                  <button class="bdg info tap">490 not counted</button>
+                </div>
+              </div>
+              <div class="stack"><i class="c-dev" style="width:36%"></i><i class="c-other" style="width:64%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="sheet-head">
+            <div style="flex:1">
+              <h3>What wasn't scanned</h3>
+              <div class="sheet-meta">Report 20261115-011830 · 490 folders · 8 groups<br>totals below are lower bounds for these paths only</div>
+            </div>
+            <button class="icon-btn">✕</button>
+          </div>
+
+          <div class="sheet-body">
+            <div class="sheet-sect">STOPPED EARLY</div>
+            <div class="stopbox">
+              Hit the <b>10 min budget</b> (600 s, +15 s grace) after 452 GB.
+              These core folders were still in the queue, so their subtrees are <b>not counted</b>:
+              <div style="margin-top:8px">
+                <div class="rootrow"><span class="st ok">✓</span><span class="p">~</span><span class="st ok">done</span></div>
+                <div class="rootrow"><span class="st ok">✓</span><span class="p">/Library/Caches</span><span class="st ok">done</span></div>
+                <div class="rootrow"><span class="st ok">✓</span><span class="p">/private/var/folders</span><span class="st ok">done</span></div>
+                <div class="rootrow"><span class="st ok">✓</span><span class="p">/opt</span><span class="st ok">done</span></div>
+                <div class="rootrow"><span class="st no">◔</span><span class="p">/Library/Developer</span><span class="st no">partial</span></div>
+                <div class="rootrow"><span class="st no">○</span><span class="p">/Applications</span><span class="st no">not started</span></div>
+              </div>
+            </div>
+
+            <div class="sheet-sect">NOT COUNTED · BY REASON</div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/Containers</div>
+                <div class="gex">operation timed out after 1 s · e.g. …/com.apple.mail/Data</div>
+              </div>
+              <div class="gright"><div class="gcount">283 <small>dirs</small></div><span class="tagk k-time">timed out</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/Application Support</div>
+                <div class="gex">operation not permitted · e.g. …/MobileSync</div>
+              </div>
+              <div class="gright"><div class="gcount">96 <small>dirs</small></div><span class="tagk k-perm">permission</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">/private/var/folders</div>
+                <div class="gex">operation not permitted · e.g. …/C/com.apple.Safari</div>
+              </div>
+              <div class="gright"><div class="gcount">38 <small>dirs</small></div><span class="tagk k-perm">permission</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/Group Containers</div>
+                <div class="gex">operation timed out after 1 s · 6 bundles</div>
+              </div>
+              <div class="gright"><div class="gcount">24 <small>dirs</small></div><span class="tagk k-time">timed out</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/Mail</div>
+                <div class="gex">operation not permitted · e.g. ~/Library/Mail/V10</div>
+              </div>
+              <div class="gright"><div class="gcount">41 <small>dirs</small></div><span class="tagk k-perm">permission</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/Messages</div>
+                <div class="gex">operation not permitted · e.g. ~/Library/Messages/Attachments</div>
+              </div>
+              <div class="gright"><div class="gcount">6 <small>dirs</small></div><span class="tagk k-perm">permission</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">~/Library/CloudStorage</div>
+                <div class="gex">cloud drive, skipped by design</div>
+              </div>
+              <div class="gright"><div class="gcount">1 <small>dir</small></div><span class="tagk k-byconf">by design</span></div>
+            </div>
+
+            <div class="grow">
+              <div class="gmain">
+                <div class="gpath">/home</div>
+                <div class="gex">autofs mount, skipped by design</div>
+              </div>
+              <div class="gright"><div class="gcount">1 <small>dir</small></div><span class="tagk k-byconf">by design</span></div>
+            </div>
+
+            <div class="hint">
+              <b>181 of these need Full Disk Access.</b><br>
+              Grant it to <code>ai-critic</code> in System Settings › Privacy &amp; Security › Full Disk Access,
+              then re-scan. The other 283 are macOS sandbox containers that time out on a 1 s read cap —
+              they stay excluded either way, and this report already treats them as unknown.
+            </div>
+
+            <div class="sheet-sect">WHAT THIS MEANS</div>
+            <div style="font-size:10.5px;color:var(--sec);line-height:1.7">
+              Nothing was deleted. These folders still exist on disk; their bytes are simply missing from
+              the category breakdown, the biggest-folders list and the trend. The
+              <code>3.2 GB can be cleared</code> number is measured per cleanup class and is
+              <b>not</b> affected.
+            </div>
+          </div>
+
+          <div class="sheet-actions">
+            <button class="btn ghost">Copy list</button>
+            <button class="btn">Re-scan</button>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>C · 完整 sheet</b>：三段结构 —— <b>Stopped early</b>（预算 + 每个 priority root 的状态：done / partial / not started）、<b>Not counted · by reason</b>（按前缀归并的组，含原始 errno 文本）、<b>What this means</b>（明确"没删任何东西 / 清算数字不受影响"）。<b>by design</b> 单独一色，和真错误分开，避免用户去"修"一个故意跳过的挂载点。</p>
+    </div>
+
+    <!-- ============ D: 运行中 ============ -->
+    <div class="frame">
+      <div class="phone">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>Space analysis</h2>
+              <span class="live">scanning</span>
+              <button class="chip">History 8</button>
+              <button class="chip clean">Clear 3.2 GB</button>
+              <button class="chip">Scan</button>
+            </div>
+            <div class="sub">started 6m 12s ago</div>
+
+            <div class="progcard">
+              <div class="ptitle">Scanning ~/Library/Developer<span class="pct">6:12 / 10:00</span></div>
+              <div class="pbar"><i style="width:62%"></i></div>
+              <div class="prow"><span class="k">budget left</span><span class="v">3:48</span></div>
+              <div class="prow"><span class="k">walked</span><span class="v">318 GB</span></div>
+              <div class="prow"><span class="k">files</span><span class="v">8.4M</span></div>
+              <div class="prow"><span class="k">core folders</span><span class="v">4 / 6</span></div>
+              <div class="prow"><span class="k">not readable</span><span class="v">487</span></div>
+
+              <div class="pivot ok">
+                Budget is now <b>10 minutes</b> (was 5). On this machine the previous run needed
+                ~7m 30s, so a full core-folder pass should finish before the cap.
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Report 20261115-011830</div>
+                  <div class="meta">2 min ago · 10m 0s · 11.2M files</div>
+                </div>
+                <div class="badges">
+                  <button class="bdg warn tap">partial · 4/6</button>
+                  <button class="bdg info tap">490 not counted</button>
+                </div>
+              </div>
+              <button class="cov-line">
+                <span class="dot"></span>
+                <span class="t"><b>490 folders not counted</b> · 8 groups · stopped at 10:00</span>
+                <span class="more">Why ›</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>D · 运行中</b>：10 分钟必须有可见的时间轴，否则用户只会觉得"卡住了"。倒计时 + <code>core folders 4/6</code> + 实时 <code>not readable</code> 计数，让"会不会又被截断"在跑的时候就能看出来。<b>注意</b>：这个页走轮询，不走 SSE，所以 300 s→600 s 不会撞上 <code>WriteTimeout: 5 * time.Minute</code>；但如果以后改成流式，就必须每 &lt;5 min 发一帧。</p>
+    </div>
+
+    <!-- ============ E: 完整态 ============ -->
+    <div class="frame">
+      <div class="phone">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>Space analysis</h2>
+              <button class="chip">History 8</button>
+              <button class="chip clean">Clear 3.2 GB</button>
+              <button class="chip on">Scan</button>
+            </div>
+            <div class="sub">last completed 1 min ago · 9 reports stored</div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Report 20261115-014205</div>
+                  <div class="meta">1 min ago · 7m 41s · 11.9M files</div>
+                </div>
+                <div class="badges">
+                  <span class="bdg">core folders scanned</span>
+                  <button class="bdg info tap">490 not counted</button>
+                </div>
+              </div>
+
+              <div class="stack">
+                <i class="c-dev" style="width:37%"></i>
+                <i class="c-vm" style="width:1.6%"></i>
+                <i class="c-cache" style="width:15%"></i>
+                <i class="c-down" style="width:3%"></i>
+                <i class="c-log" style="width:1%"></i>
+                <i class="c-other" style="width:42.4%"></i>
+              </div>
+              <div class="legend">
+                <span class="lg"><i class="c-dev"></i>Dev cache <b>168 GB</b></span>
+                <span class="lg"><i class="c-vm"></i>Containers <b>6.8 GB</b></span>
+                <span class="lg"><i class="c-cache"></i>App caches <b>70 GB</b></span>
+                <span class="lg"><i class="c-down"></i>Downloads <b>13 GB</b></span>
+                <span class="lg"><i class="c-log"></i>Logs <b>4.5 GB</b></span>
+                <span class="lg"><i class="c-other"></i>Everything else <b>195 GB</b></span>
+              </div>
+
+              <div class="reclaim">
+                <div>
+                  <div class="rv">≈ 3.2 GB can be cleared</div>
+                  <div class="rl">452 GB walked of 460 GB used</div>
+                </div>
+                <button class="btn">Preview ›</button>
+              </div>
+
+              <button class="cov-line">
+                <span class="dot" style="background:var(--mut)"></span>
+                <span class="t"><b>490 folders not counted</b> · 8 groups · permission &amp; timeouts</span>
+                <span class="more">Why ›</span>
+              </button>
+            </div>
+
+            <div class="sub" style="margin-top:14px">目标状态：预算够了以后 <b>partial 消失</b>，但"读不到"这个事实仍然保留成一条中性入口 —— 不喊狼来了，也不隐瞒。</div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>E · 完整态（目标）</b>：<code>core folders scanned</code> + <code>490 not counted</code> 并存。这是 10 分钟预算想要的结果：partial 变成真正的异常信号，而不是一个永久挂在页面上的黄色警告。</p>
+    </div>
+
+    <!-- ============ F: 历史列表 ============ -->
+    <div class="frame">
+      <div class="phone">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content">
+          <div class="page">
+            <div class="page-h">
+              <button class="icon-btn">‹</button>
+              <h2>History</h2>
+              <button class="chip">Back</button>
+            </div>
+            <div class="sub">8 reports · newest first</div>
+
+            <div class="hist">
+              <div class="row1"><span class="id">20261115-014205</span><span class="b bdg">core scanned</span></div>
+              <div class="row2">1 min ago · 7m 41s · 11.9M files · 452 GB · <code>490 not counted</code></div>
+            </div>
+
+            <div class="hist">
+              <div class="row1"><span class="id">20261115-011830</span><span class="b bdg warn">partial · 4/6</span></div>
+              <div class="row2">6 min ago · 10m 0s · 11.2M files · 452 GB · <code>490 not counted</code> · <b style="color:var(--amber)">budget</b></div>
+            </div>
+
+            <div class="hist">
+              <div class="row1"><span class="id">20261114-203720</span><span class="b bdg warn">partial · 3/6</span></div>
+              <div class="row2">yesterday · 5m 0s · 9.79M files · 401 GB · <code>432 perm · 308 skipped</code> · legacy</div>
+            </div>
+
+            <div class="hist">
+              <div class="row1"><span class="id">20261109-094947</span><span class="b bdg warn">partial · 3/6</span></div>
+              <div class="row2">6 days ago · 5m 2s · 9.6M files · 398 GB · <code>legacy report</code></div>
+            </div>
+
+            <div class="hist">
+              <div class="row1"><span class="id">20261108-231144</span><span class="b bdg warn">partial</span></div>
+              <div class="row2">7 days ago · 1m 30s · 4.1M files · 210 GB · <code>old 90 s budget</code></div>
+            </div>
+
+            <div class="sub" style="margin-top:14px">历史报告不回填（没有原始路径可归并），只按老口径显示，不假装能解释。</div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>F · 历史列表</b>：<code>partial</code> 后面直接跟 <code>· 4/6</code>，预算停下的那一条额外标 <code>budget</code>；老报告标 <code>legacy</code>，不伪造新字段。趋势图上同样的点也带这个后缀（<code>SpaceTrendView.tsx:153</code> 已经有 <code>· partial</code> 的位置，改成同口径即可）。</p>
+    </div>
+
+  </div>
+
+  <div class="notes">
+    <h2>建议 · 数据模型 / 归并算法 / 接口</h2>
+
+    <h3>1. 预算：300 s → 600 s</h3>
+    <table>
+      <tr><th>位置</th><th>改动</th><th>说明</th></tr>
+      <tr><td><code>analysis_manager.go:16</code></td><td><code>const scanBudget = 10 * time.Minute</code></td><td>唯一的预算开关。软截止：到点后 <code>truncated=true</code>，已完成的部分照常出报告。</td></tr>
+      <tr><td><code>analysis_scan_run.go:111</code></td><td><code>scanGrace</code> 保持 15 s</td><td>walk 最多越界 15 s 收尾；意味着最坏墙钟 ≈ 615 s。</td></tr>
+      <tr><td><code>analysis_scan_run.go:11</code></td><td>fallback 120 s 保持不动</td><td>只有不传 Budget 的调用方（测试）走这个值。</td></tr>
+      <tr><td><code>dirReadTimeout</code></td><td>保持 1 s</td><td>约 306 个卡死目录 × 1 s ≈ 306 s，正好塞得进 600 s；<b>不建议</b>同时调大，否则它们会挤掉真正的扫描时间。</td></tr>
+    </table>
+    <p>为什么 10 分钟够：上一轮 300 s 走了 401 GB 且 priority 只完成 3/6，其中约 306 s 花在 <code>~/Library/Containers</code> 的 283 次 1 s 超时上（LIFO 深度优先让 <code>~</code> 一开始就独占队列）。600 s 把"超时开销"和"有效扫描"都算进去仍有富余。如果实测还差，再考虑把 <code>~</code> 从 priority roots 里拿掉、或给每个 root 加独立配额 —— 那是第二个问题，本稿不动。</p>
+
+    <h3>2. 可解释性：先补数据，再谈 UI</h3>
+    <p>今天只有 <b>两处</b>产生 <code>SkippedPath</code>：<code>abandon()</code>（<code>"read timed out"</code>）和 <code>skipDir()</code>（<code>"autofs mount"</code> / <code>"cloud drive"</code>）。权限错误在 <code>analysis_scan_queue.go:159</code> 直接 <code>settle(..., noAccess=os.IsPermission(err), skipped=nil)</code> —— <b>路径和原因全丢</b>，只加了一个计数。所以 <code>432 dirs skipped</code> 在数据层就是不可解释的。这一步必须补：</p>
+    <pre>type SkippedPath struct {
+    Path   string `json:"path"`              // ~-relative, e.g. ~/Library/Mail/V10
+    Kind   string `json:"kind"`              // permission | timeout | io | by_design
+    Reason string `json:"reason"`            // 原样 errno 文本: "operation not permitted"
+    Depth  int    `json:"depth,omitempty"`   // 便于归并
+}
+
+// 三类产出点统一走一个 helper:
+//   permission/io  -> settle(..., skipped: &SkippedPath{Kind:"permission", Reason: err.Error()})
+//   timeout        -> abandon(): Kind:"timeout", Reason:"operation timed out after 1s"
+//   skipDir()      -> Kind:"by_design", Reason:"autofs mount" | "cloud drive"</pre>
+    <p><code>Report</code> / <code>ReportSummary</code> 增加 <code>not_counted_total</code>（口径统一 = 所有 kind 的条数），替换 UI 里那个跟 <code>skipped</code> 对不上的 <code>no_access_dirs</code> 展示。<code>no_access_dirs</code> 字段保留不动（CLI 和老报告还在用）。</p>
+
+    <h3>3. 前缀归并算法（服务端，随报告落库）</h3>
+    <table>
+      <tr><th>步骤</th><th>规则</th><th>真机效果（308 条）</th></tr>
+      <tr><td>① 归一</td><td>home 前缀 → <code>~</code>；去掉末尾 <code>/</code>；<code>Depth</code> = 段数</td><td>—</td></tr>
+      <tr><td>② 分桶</td><td>key = <code>(kind, prefix)</code>，<b>同 kind 才合并</b>（同一目录既超时又权限的情况必须分两行，否则原因会撒谎）</td><td>—</td></tr>
+      <tr><td>③ 取前缀</td><td>home 下取前 <b>3</b> 段（<code>~ / Library / Containers</code>）；绝对路径取前 <b>2</b> 段（<code>/private/var</code>）；<b>不足则用整条路径</b></td><td><code>~/Library/Containers/com.x/Data</code> → <code>~/Library/Containers</code></td></tr>
+      <tr><td>④ 折叠包含</td><td>同 kind 下若 A 是 B 的前缀，A 吸收 B</td><td><code>/private/var</code> 吸收 <code>/private/var/folders</code></td></tr>
+      <tr><td>⑤ 单例</td><td><code>count == 1</code> 的组<b>不折叠</b>，直接显示完整路径</td><td><code>/home</code>、<code>~/Library/CloudStorage</code> 原样保留</td></tr>
+      <tr><td>⑥ 排序</td><td>先按"可操作性"<code>permission &gt; io &gt; timeout &gt; by_design</code>，同档按 <code>count</code> 降序</td><td>permission 组永远在前（用户能修）</td></tr>
+      <tr><td>⑦ 截断</td><td>保留前 <b>8</b> 组；剩余 → <code>other: {groups, dirs}</code>；<code>skipped_total</code> 始终是原始总数</td><td>308 → 5 组，卡片里显示 4 组</td></tr>
+    </table>
+    <pre>coverage: {
+  priority_roots: ["~","/Library/Developer","/Library/Caches","/Applications","/private/var/folders","/opt"],
+  priority_scanned: 4, priority_complete: false,
+  budget_s: 600, elapsed_s: 600.2, truncated: true,
+  not_counted_total: 490,
+  skip_groups: [
+    {prefix:"~/Library/Application Support", kind:"permission", count:96,
+     reason:"operation not permitted", example:"~/Library/Application Support/MobileSync"},
+    {prefix:"~/Library/Containers", kind:"timeout", count:283,
+     reason:"operation timed out after 1s", example:"~/Library/Containers/com.apple.mail/Data"},
+    {prefix:"~/Library/Group Containers", kind:"timeout", count:24,
+     reason:"operation timed out after 1s"},
+    {prefix:"~/Library/Mail", kind:"permission", count:41, reason:"operation not permitted"},
+    {prefix:"~/Library/Messages", kind:"permission", count:6, reason:"operation not permitted"},
+    {prefix:"/home", kind:"by_design", count:1, reason:"autofs mount"}
+  ],
+  skip_other: {groups: 0, dirs: 0},   // 8 组以内不截断; 超过才折进这里
+  skipped: [ /* 原始明细封顶 200 条，兼容老 UI / CLI --json */ ]
+}</pre>
+
+    <h3>4. UI 改动清单</h3>
+    <table>
+      <tr><th>文件</th><th>改动</th></tr>
+      <tr><td><code>SpaceResultCard.tsx:59-61</code></td><td><code>partial</code> → <code>partial · {scanned}/{roots}</code> 且变成 <code>&lt;button&gt;</code>；<code>time budget</code> 徽章并入 meta 的 <code>10 min budget used</code>；新增 <code>{n} not counted</code> 徽章；删除 <code>432 dirs skipped</code> 那段 meta 文本。</td></tr>
+      <tr><td><code>SpaceResultCard.tsx:169</code></td><td><code>mcc-space-skipped</code> 那段 <code>{skipped}</code> 换成新的 <code>&lt;SpaceCoverageLine /&gt;</code>（折叠一行 + 展开面板），删除 <code>skippedNote()</code>。</td></tr>
+      <tr><td><code>spaceTone.ts:127</code></td><td><code>skippedNote()</code> 废弃，换成 <code>skipSummary(summary)</code> 生成 "490 folders · 8 groups · stopped at 10:00"。</td></tr>
+      <tr><td>新组件 <code>SpaceCoverageSheet.tsx</code></td><td>完整 sheet（C 图），由徽章或 <code>All groups ›</code> 打开。</td></tr>
+      <tr><td><code>SpaceHistoryView.tsx:107</code> / <code>SpaceTrendView.tsx:153</code></td><td><code> · partial</code> → <code> · partial {n}/{m}</code>，预算截断的再加 <code>budget</code>。</td></tr>
+      <tr><td><code>SpaceAnalysis.css</code></td><td>新增 <code>.mcc-cov-line / .mcc-cov-panel / .mcc-cov-group / .mcc-cov-tag(k-perm/k-time/k-io/k-byconf)</code>；删 <code>.mcc-space-skipped</code>。</td></tr>
+    </table>
+
+    <h3>5. Decisions（请逐条拍板）</h3>
+    <ol>
+      <li><b>预算 600 s</b>（+15 s grace），<code>dirReadTimeout</code> 保持 1 s —— 确认？</li>
+      <li><b>partial 语义收窄</b>为"核心目录未走完"，"有目录读不到"独立成 <code>not counted</code> 中性入口 —— 确认？（这决定了 10 分钟后 partial 会不会自然消失）</li>
+      <li><b>前缀深度</b>：home 3 段 / 绝对 2 段。是否改成"动态取最长公共前缀"？（更准，但同样要写规则表，且报告 diff 不稳定）</li>
+      <li><b>单例不折叠</b>（<code>/home</code> 保留全路径）—— 确认？</li>
+      <li><b>原因分四类</b> <code>permission | timeout | io | by_design</code>，界面用 errno 原文做副标题 —— 是否需要更细（如区分 <code>EPERM</code> / <code>EACCES</code> / <code>ENOTDIR</code>）？</li>
+      <li><b>by_design 分组单独成色、排在最后</b>，且 TCC 提示只在 permission 组 ≥ 20 个时出现 —— 确认？</li>
+      <li><b>组上限 8、卡片内展示 4</b>，其余折成 <code>N more groups (M dirs)</code>，<code>skipped_total</code> 永不被截断 —— 确认？</li>
+      <li><b>原始明细封顶 200 条</b>随报告存储（今天 308 条 ≈ 30 KB，10 分钟后可能翻几倍）—— 同意封顶还是全存？</li>
+      <li><b>老报告不迁移、不回填</b>，历史里标 <code>legacy</code> —— 确认？</li>
+      <li><b>不做</b>："每目录重试"、"用户手动排除某前缀"、"扫描中途看 live 分组"（本轮范围外）。</li>
+    </ol>
+
+    <h3>6. 验收</h3>
+    <ul>
+      <li>真机跑一次 <code>POST /api/server/disk/analysis/start</code>，<code>GET /report/{id}</code> 里能看到 <code>coverage.budget_s == 600</code>、<code>not_counted_total &gt; 0</code>、<code>skip_groups</code> 非空且 <code>Σcount + skip_other.dirs == not_counted_total</code>（这条要写单测）。</li>
+      <li>同一份报告，<code>skip_groups</code> 里不存在同前缀同 kind 的两行，也不存在"某行是另一行前缀 + 同 kind"的情况。</li>
+      <li>Web：<code>partial · 4/6</code> 可点开；<code>490 not counted</code> 可打开 sheet；老报告不崩（<code>coverage == null</code> 走老路径）。</li>
+      <li>跑满 10 分钟的实例不触发任何 HTTP 超时（当前是轮询，验证 <code>fetchAnalysisStatus</code> 在 10 分钟内正常）。</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

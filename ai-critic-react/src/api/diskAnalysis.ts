@@ -20,9 +20,40 @@ export interface AnalysisEntry {
     reclaimable: boolean;
 }
 
+/**
+ * Why a folder was not counted. Permission and io are fixable, timeout is a
+ * retry, by_design is the scan's own decision.
+ */
+export type AnalysisSkipKind = 'permission' | 'timeout' | 'io' | 'by_design' | string;
+
 export interface AnalysisSkippedPath {
     path: string;
+    kind?: AnalysisSkipKind;
     reason?: string;
+    depth?: number;
+}
+
+/** One folded row: many folders under one prefix, with a single example. */
+export interface AnalysisSkipGroup {
+    prefix: string;
+    kind: AnalysisSkipKind;
+    count: number;
+    reason?: string;
+    example?: string;
+}
+
+/** The rows past the display cap, kept as counts so the total stays exact. */
+export interface AnalysisSkipOther {
+    groups: number;
+    dirs: number;
+}
+
+/** One core folder's fate: read to the end, half read, or never reached. */
+export type AnalysisPriorityState = 'done' | 'partial' | 'not_started' | string;
+
+export interface AnalysisPriorityRootState {
+    root: string;
+    state: AnalysisPriorityState;
 }
 
 /** Which of the important folders the walk actually finished. */
@@ -30,6 +61,22 @@ export interface AnalysisCoverage {
     priority_roots?: string[];
     priority_scanned: number;
     priority_complete: boolean;
+    /** priority_roots in the same order, each with its fate. */
+    priority_states?: AnalysisPriorityRootState[];
+    /** Soft time cap the walk ran under, in seconds. */
+    budget_s?: number;
+    /** Wall time the walk actually took, in seconds (fractional). */
+    elapsed_s?: number;
+    /** The walk hit the budget; categories are a lower bound. */
+    truncated?: boolean;
+    /**
+     * Folders missing from the totals across every kind. This is the headline
+     * number and is never truncated, unlike `skipped`.
+     */
+    not_counted_total?: number;
+    skip_groups?: AnalysisSkipGroup[];
+    skip_other?: AnalysisSkipOther;
+    /** Raw rows, capped on the server; use skip_groups for display. */
     skipped?: AnalysisSkippedPath[];
 }
 
@@ -45,6 +92,8 @@ export interface AnalysisReport {
     scanned_bytes: number;
     files: number;
     no_access_dirs: number;
+    /** Mirrors coverage.not_counted_total for callers that skip the coverage. */
+    not_counted_total?: number;
     roots?: string[];
     categories: AnalysisCategory[];
     entries?: AnalysisEntry[];

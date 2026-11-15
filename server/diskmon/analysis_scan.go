@@ -39,13 +39,19 @@ type scanResult struct {
 	Files        int64
 	NoAccessDirs int
 	Truncated    bool
-	// Skipped lists the mounts and folders the walk refused to enter, so the
-	// report can say which parts of the disk it never looked at.
-	Skipped []SkippedPath
+	// Skipped lists the mounts and folders the walk refused to enter or could
+	// not read, so the report can say which parts of the disk it never looked
+	// at. The list is capped (maxRawSkips): SkipGroups carries the meaning and
+	// SkippedTotal is the uncapped count.
+	Skipped      []SkippedPath
+	SkipGroups   []SkipGroup
+	SkipOther    *SkipOther
+	SkippedTotal int
 	// PriorityRoots are the subtrees the category numbers lead with. Priority
 	// roots finish before the rest of the volume, so even a truncated report
 	// has a trustworthy headline.
 	PriorityRoots   []string
+	PriorityStates  []PriorityRootState
 	PriorityScanned int
 }
 
@@ -64,7 +70,9 @@ var skipDirNames = map[string]bool{
 // directory), never descended into. A non-empty reason means the skip costs
 // coverage and is worth reporting; the autofs mounts and the cloud File
 // Provider folder are the ones that matter, because a single readdir there can
-// block for minutes and no time budget survives that.
+// block for minutes and no time budget survives that. An empty reason is the
+// scan's own bookkeeping (another volume's bytes, a firmlink loop guard) and is
+// not reported as a folder the user is missing.
 var skipPaths = map[string]string{
 	"/Volumes":                "", // other mounted volumes are counted on their own
 	"/private/var/vm":         "", // swap files
@@ -120,6 +128,14 @@ type scanNode struct {
 	// abandoned marks a directory whose scan was given up on, so a read stuck
 	// in the kernel can never publish its bytes after the fact.
 	abandoned bool
+	// settled records that this directory's listing was already published or
+	// dropped, so the worker and the watchdog cannot both complete it.
+	settled bool
+	// started records that a worker picked this directory up. A priority root
+	// that never started is "not started" rather than "half read", which is the
+	// difference between "the budget ran out here" and "the queue never got
+	// here".
+	started bool
 }
 
 type scanAccumulator struct {
@@ -136,8 +152,10 @@ type scanAccumulator struct {
 	links      map[[2]uint64]*parkedLink
 	visited    map[string]bool
 	skipped    []SkippedPath
-	skippedAt  map[string]bool
-	phase      string
+	// skippedAt dedupes by (kind, path): the same directory can be skipped for
+	// different reasons, and those are different rows in the report.
+	skippedAt map[string]bool
+	phase     string
 
 	walked   int64
 	files    int64
@@ -284,6 +302,26 @@ func (a *scanAccumulator) priorityScannedLocked() int {
 	return scanned
 }
 
+// priorityStatesLocked pairs every priority root with its fate. The caller holds
+// a.mu, or is the single goroutine still running.
+func (a *scanAccumulator) priorityStatesLocked() []PriorityRootState {
+	states := make([]PriorityRootState, 0, len(a.priorityNodes))
+	for i, node := range a.priorityNodes {
+		if i >= len(a.priorityList) {
+			break
+		}
+		state := RootNotStarted
+		switch {
+		case node.pending == 0:
+			state = RootDone
+		case node.started:
+			state = RootPartial
+		}
+		states = append(states, PriorityRootState{Root: a.priorityList[i], State: state})
+	}
+	return states
+}
+
 func (a *scanAccumulator) finish() scanResult {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -291,7 +329,19 @@ func (a *scanAccumulator) finish() scanResult {
 	a.attributeLinks()
 	// Skipped paths surface in the report and must not depend on which worker
 	// finished first, so they are ordered here instead of at discovery time.
-	sort.Slice(a.skipped, func(i, j int) bool { return a.skipped[i].Path < a.skipped[j].Path })
+	sort.Slice(a.skipped, func(i, j int) bool {
+		if a.skipped[i].Path != a.skipped[j].Path {
+			return a.skipped[i].Path < a.skipped[j].Path
+		}
+		return a.skipped[i].Kind < a.skipped[j].Kind
+	})
+	// Group before capping the raw list: the groups and the headline count must
+	// describe every folder that was missed, not only the ones that fit here.
+	skipGroups, skipOther := groupSkips(a.skipped)
+	skippedTotal := len(a.skipped)
+	if len(a.skipped) > maxRawSkips {
+		a.skipped = a.skipped[:maxRawSkips]
+	}
 
 	res := scanResult{
 		Roots:           append([]string{}, a.cfg.Roots...),
@@ -300,8 +350,12 @@ func (a *scanAccumulator) finish() scanResult {
 		NoAccessDirs:    a.noAccess,
 		Truncated:       a.truncated.Load(),
 		Skipped:         append([]SkippedPath{}, a.skipped...),
+		SkipGroups:      skipGroups,
+		SkipOther:       skipOther,
+		SkippedTotal:    skippedTotal,
 		PriorityRoots:   append([]string{}, a.priorityList...),
 		PriorityScanned: a.priorityScannedLocked(),
+		PriorityStates:  a.priorityStatesLocked(),
 	}
 	res.Categories = make([]Category, 0, len(analysisCategories))
 	for _, def := range analysisCategories {

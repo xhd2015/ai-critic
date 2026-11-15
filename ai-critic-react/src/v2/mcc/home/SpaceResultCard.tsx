@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { formatBytes } from '../../../api/processes';
 import type { AnalysisReport, AnalysisReportSummary } from '../../../api/diskAnalysis';
 import {
@@ -6,13 +7,14 @@ import {
     duration,
     fileCount,
     percentOf,
-    priorityComplete,
     reclaimableTotal,
     relativeTime,
     signedBytes,
-    skippedNote,
     sortedCategories,
 } from './spaceTone';
+import { coverageView, priorityComplete, priorityFraction } from './spaceCoverageTone';
+import SpaceCoverageLine from './SpaceCoverageLine';
+import SpaceCoverageSheet from './SpaceCoverageSheet';
 
 interface Props {
     summary: AnalysisReport | AnalysisReportSummary;
@@ -37,8 +39,10 @@ export default function SpaceResultCard({
     const reclaimable = reclaimableTotal(summary);
     const previousReclaimable = previous ? reclaimableTotal(previous) : null;
     const reclaimDelta = previousReclaimable === null ? null : reclaimable - previousReclaimable;
+    const coverage = coverageView(summary);
+    const fraction = priorityFraction(summary);
     const partial = !priorityComplete(summary);
-    const skipped = skippedNote(summary);
+    const [coverageOpen, setCoverageOpen] = useState(false);
     const previousBytes = (id: string) => {
         if (!previous) return null;
         const found = previous.categories.find(c => c.id === id);
@@ -52,13 +56,29 @@ export default function SpaceResultCard({
                     <div className="mcc-space-card-title">Report {summary.id}</div>
                     <div className="mcc-space-meta">
                         {relativeTime(summary.scanned_at)} · {duration(summary.scan_ms)} · {fileCount(summary.files)}
-                        {summary.no_access_dirs > 0 ? ` · ${summary.no_access_dirs} dirs skipped` : ''}
                     </div>
                 </div>
                 <div className="mcc-space-badges">
-                    {partial && <span className="mcc-space-badge warn">partial</span>}
-                    {summary.truncated && partial && <span className="mcc-space-badge warn">time budget</span>}
+                    {partial && (
+                        <button
+                            type="button"
+                            className="mcc-space-badge warn tap"
+                            onClick={() => coverage && setCoverageOpen(true)}
+                            disabled={!coverage}
+                        >
+                            partial{fraction ? ` · ${fraction}` : ''}
+                        </button>
+                    )}
                     {!partial && <span className="mcc-space-badge">core folders scanned</span>}
+                    {coverage && (
+                        <button
+                            type="button"
+                            className="mcc-space-badge info tap"
+                            onClick={() => setCoverageOpen(true)}
+                        >
+                            {coverage.total} not counted
+                        </button>
+                    )}
                     {summary.entries_dropped && <span className="mcc-space-badge">detail trimmed</span>}
                 </div>
             </div>
@@ -152,12 +172,21 @@ export default function SpaceResultCard({
                 })}
             </div>
 
-            {skipped && <div className="mcc-space-skipped">{skipped}</div>}
+            {coverage && <SpaceCoverageLine view={coverage} onOpen={() => setCoverageOpen(true)} />}
 
             <div className="mcc-space-foot">
                 apparent file sizes · APFS clones and purgeable space are not counted · tap a category for its
                 trend
             </div>
+
+            {coverageOpen && coverage && (
+                <SpaceCoverageSheet
+                    reportId={summary.id}
+                    scannedBytes={summary.scanned_bytes}
+                    view={coverage}
+                    onClose={() => setCoverageOpen(false)}
+                />
+            )}
         </div>
     );
 }

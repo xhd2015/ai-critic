@@ -3,6 +3,7 @@ package diskmon
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -190,7 +191,7 @@ func TestScanPriorityCoverage(t *testing.T) {
 		t.Errorf("priority scanned = %d, want 1", result.PriorityScanned)
 	}
 
-	coverage := scanCoverage(result)
+	coverage := scanCoverage(result, scanBudget, 1_000)
 	if coverage == nil || !coverage.PriorityComplete {
 		t.Fatalf("coverage = %+v, want the priority set complete", coverage)
 	}
@@ -340,10 +341,15 @@ func TestScanSkipDirs(t *testing.T) {
 		{"/Users/me/.Trash", ".Trash", false, ""},
 	}
 	for _, testCase := range cases {
-		reason, skip := acc.skipDir(testCase.logical, testCase.name)
+		kind, reason, skip := acc.skipDir(testCase.logical, testCase.name)
 		if skip != testCase.skip || reason != testCase.reason {
 			t.Errorf("skipDir(%q) = (%q, %v), want (%q, %v)",
 				testCase.logical, reason, skip, testCase.reason, testCase.skip)
+		}
+		// Everything the ignore table covers is the scan's own decision, never a
+		// filesystem refusal.
+		if skip && kind != SkipByDesign {
+			t.Errorf("skipDir(%q) kind = %q, want %q", testCase.logical, kind, SkipByDesign)
 		}
 	}
 }
@@ -433,8 +439,13 @@ func TestScanAbandonDropsTheDirectory(t *testing.T) {
 	if got := acc.skipped[0].Path; got != "~/Library/Containers/stuck/Data" {
 		t.Fatalf("skipped path = %q", got)
 	}
-	if got := acc.skipped[0].Reason; got != "read timed out" {
-		t.Fatalf("skipped reason = %q", got)
+	if got := acc.skipped[0].Kind; got != SkipTimeout {
+		t.Fatalf("skipped kind = %q, want %q", got, SkipTimeout)
+	}
+	// The budget is a second per directory, and the reason says so: "timed out"
+	// alone would not tell the user whether to retry.
+	if got, want := acc.skipped[0].Reason, fmt.Sprintf("operation timed out after %s", dirReadTimeout); got != want {
+		t.Fatalf("skipped reason = %q, want %q", got, want)
 	}
 
 	// The stuck goroutine comes back after the fact: nothing may be published.
@@ -473,5 +484,125 @@ func TestStallKeepsTheParent(t *testing.T) {
 	}
 	if len(acc.skipped) != 1 {
 		t.Fatalf("skipped = %+v, want only the stalled directory", acc.skipped)
+	}
+}
+
+// TestScanAbandonAfterSettleStillFolds is the regression behind "a finished
+// scan still reports ~ as partial". A directory can be abandoned in the window
+// between publishing its children and the watchdog deciding it stalled; those
+// children are still queued and fold into an already dropped node, so the node
+// must keep counting them instead of folding twice or never.
+func TestScanAbandonAfterSettleStillFolds(t *testing.T) {
+	acc := &scanAccumulator{
+		cfg:        scanConfig{Home: "/Users/me"},
+		class:      newClassifier("/Users/me", ""),
+		queue:      newScanQueue(),
+		catBytes:   map[string]int64{},
+		catReclaim: map[string]int64{},
+		links:      map[[2]uint64]*parkedLink{},
+		visited:    map[string]bool{},
+		skippedAt:  map[string]bool{},
+	}
+	root := &scanNode{path: "/Users/me", pending: 1}
+	root.priorityRoot = true
+	acc.priorityList = []string{"~"}
+	acc.priorityNodes = []*scanNode{root}
+
+	settled := &scanNode{path: "/Users/me/Library", parent: root, pending: 1, cat: "library"}
+	root.pending++ // the child handed to the queue
+	acc.settleLocked(root, 0, 0, nil, nil, false, true)
+	if root.pending != 1 || settled.pending != 1 {
+		t.Fatalf("seed pending = root %d, child %d", root.pending, settled.pending)
+	}
+
+	// Listing the child publishes two grandchildren, then the watchdog gives up
+	// on it before the last worker folds them back.
+	left := &scanNode{path: "/Users/me/Library/A", parent: settled, pending: 1, cat: "library"}
+	right := &scanNode{path: "/Users/me/Library/B", parent: settled, pending: 1, cat: "library"}
+	acc.settleLocked(settled, 1024, 1, []*scanNode{left, right}, nil, false, true)
+	if settled.pending != 2 {
+		t.Fatalf("settled pending = %d, want 2", settled.pending)
+	}
+	acc.abandon(settled)
+
+	for _, child := range []*scanNode{left, right} {
+		acc.settle(child, 0, 0, nil, nil, false, true)
+	}
+
+	if root.pending != 0 {
+		t.Fatalf("root pending = %d, want 0 after every queued directory drained", root.pending)
+	}
+	if got := acc.priorityScannedLocked(); got != 1 {
+		t.Errorf("priority scanned = %d, want 1", got)
+	}
+	states := acc.priorityStatesLocked()
+	if len(states) != 1 || states[0].State != RootDone {
+		t.Errorf("priority states = %+v, want ~ done", states)
+	}
+	// The dropped directory must never surface as one of the biggest folders.
+	for _, node := range acc.recorded {
+		if node == settled {
+			t.Fatal("abandoned directory stayed in the biggest-folders list")
+		}
+	}
+}
+
+// TestAbandonAfterSettleIsANoOp covers the race the ticker watchdog can lose:
+// the worker publishes a directory at the same moment the watchdog decides it
+// stalled. Publishing it a second time consumes its parent's counter twice, so
+// the counter goes negative, never equals zero, and a scan that finished inside
+// its budget still claims the priority root was only partly read.
+func TestAbandonAfterSettleIsANoOp(t *testing.T) {
+	acc := &scanAccumulator{
+		cfg:        scanConfig{Home: "/Users/me"},
+		class:      newClassifier("/Users/me", ""),
+		queue:      newScanQueue(),
+		catBytes:   map[string]int64{},
+		catReclaim: map[string]int64{},
+		links:      map[[2]uint64]*parkedLink{},
+		visited:    map[string]bool{},
+		skippedAt:  map[string]bool{},
+	}
+	root := &scanNode{path: "/Users/me", pending: 1}
+	root.priorityRoot = true
+	acc.priorityList = []string{"~"}
+	acc.priorityNodes = []*scanNode{root}
+
+	child := &scanNode{path: "/Users/me/Documents", parent: root, pending: 1, cat: "documents"}
+	root.pending++
+	acc.settleLocked(root, 0, 0, nil, nil, false, true)
+
+	// The worker wins: the directory publishes one grandchild and one skip.
+	grandchild := &scanNode{path: "/Users/me/Documents/a", parent: child, pending: 1, cat: "documents"}
+	acc.settle(child, 512, 3, []*scanNode{grandchild}, []SkippedPath{
+		acc.newSkip("/Users/me/Documents/denied", SkipPermission, "permission denied"),
+	}, false, true)
+	if !child.settled {
+		t.Fatal("child was not published by the worker")
+	}
+
+	// The watchdog arrives late with its own verdict for the same directory.
+	acc.abandon(child)
+
+	if child.abandoned {
+		t.Error("a directory that already published must not be marked abandoned")
+	}
+	if got := len(acc.skipped); got != 1 {
+		t.Errorf("recorded %d skips, want only the worker's one: %+v", got, acc.skipped)
+	}
+
+	acc.settle(grandchild, 256, 1, nil, nil, false, true)
+
+	if root.pending != 0 {
+		t.Fatalf("root pending = %d, want 0", root.pending)
+	}
+	for _, node := range []*scanNode{root, child, grandchild} {
+		if node.pending < 0 {
+			t.Errorf("%s pending = %d, want >= 0", node.path, node.pending)
+		}
+	}
+	states := acc.priorityStatesLocked()
+	if len(states) != 1 || states[0].State != RootDone {
+		t.Errorf("priority states = %+v, want ~ done", states)
 	}
 }
