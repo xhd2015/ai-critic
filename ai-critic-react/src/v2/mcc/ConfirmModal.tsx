@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './KillProcessModal.css';
 
@@ -22,6 +22,8 @@ export interface ConfirmModalProps {
     warning?: string;
     loading?: boolean;
     error?: string | null;
+    /** Extra controls rendered right below the message (e.g. a kill-mode picker). */
+    children?: ReactNode;
 }
 
 export function ConfirmModal({
@@ -36,6 +38,7 @@ export function ConfirmModal({
     warning,
     loading: externalLoading,
     error: externalError,
+    children,
 }: ConfirmModalProps) {
     const [internalLoading, setInternalLoading] = useState(false);
     const [internalError, setInternalError] = useState<string | null>(null);
@@ -67,11 +70,9 @@ export function ConfirmModal({
                     <button className="mcc-modal-close" onClick={onClose} disabled={loading}>×</button>
                 </div>
                 <div className="mcc-modal-body">
-                    {warning ? (
-                        <p className="mcc-modal-warning">{warning}</p>
-                    ) : (
-                        <p>{message}</p>
-                    )}
+                    {warning === message ? null : <p>{message}</p>}
+                    {warning && <p className="mcc-modal-warning">{warning}</p>}
+                    {children}
                     {info && (
                         <div className="mcc-modal-info">
                             {Object.entries(info).map(([key, value]) => (

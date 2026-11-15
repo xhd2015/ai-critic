@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { ConfirmModal } from '../ConfirmModal';
 import { formatBytes, killHostProcess, type HostProcess } from '../../../api/processes';
+import { KILL_MODES, killModeSignalText, killModeTitle, resolveKillModal, type KillMode } from './killMode';
 
 export function SystemKillModal({
     proc,
@@ -10,34 +12,61 @@ export function SystemKillModal({
     onClose: () => void;
     onKilled: () => void;
 }) {
-    const locked = !!proc.protected;
-    const isTunnel = (proc.tags ?? []).includes('tun');
-    const warning = locked
-        ? proc.protected
-        : isTunnel
-            ? 'This looks like the Cloudflare connector. Killing it disconnects this page until the tunnel respawns.'
-            : undefined;
+    const [mode, setMode] = useState<KillMode>('graceful');
+    const state = resolveKillModal({
+        pid: proc.pid,
+        mode,
+        protectedReason: proc.protected,
+        isTunnel: (proc.tags ?? []).includes('tun'),
+    });
 
     return (
         <ConfirmModal
             title="Kill Process"
-            message={locked ? 'This process is protected and cannot be killed from the UI.' : 'Are you sure you want to kill this process?'}
-            warning={warning}
+            message={state.message}
+            warning={state.warning}
             info={{
                 Name: proc.name,
                 PID: String(proc.pid),
                 User: proc.user,
                 'CPU / RSS': `${proc.cpu_percent.toFixed(1)}% · ${formatBytes(proc.rss_bytes)}`,
             }}
-            command={locked ? `kill ${proc.pid}` : `kill -TERM ${proc.pid}`}
-            confirmLabel={locked ? 'Cannot Kill' : 'Kill Process'}
-            confirmVariant={locked ? 'default' : 'danger'}
+            command={state.command}
+            confirmLabel={state.confirmLabel}
+            confirmVariant={state.locked ? 'default' : 'danger'}
             onConfirm={async () => {
-                if (locked) return;
-                await killHostProcess(proc.pid, 'TERM');
+                if (state.locked) return;
+                await killHostProcess(proc.pid, state.signal);
                 onKilled();
             }}
             onClose={onClose}
-        />
+        >
+            <div className="mcc-modal-modes" role="radiogroup" aria-label="Kill mode">
+                {KILL_MODES.map(option => {
+                    const active = mode === option;
+                    const className = [
+                        'mcc-modal-mode',
+                        active ? 'mcc-modal-mode-active' : '',
+                        option === 'force' ? 'mcc-modal-mode-force' : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' ');
+                    return (
+                        <button
+                            key={option}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            className={className}
+                            disabled={state.locked}
+                            onClick={() => setMode(option)}
+                        >
+                            <span className="mcc-modal-mode-title">{killModeTitle(option)}</span>
+                            <span className="mcc-modal-mode-signal">{killModeSignalText(option)}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </ConfirmModal>
     );
 }

@@ -216,3 +216,63 @@
 .mcc-modal-btn-kill:hover:not(:disabled) {
     background: #dc2626;
 }
+
+.mcc-modal-modes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.mcc-modal-mode {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 11px;
+    text-align: left;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mcc-modal-mode:hover:not(:disabled) {
+    border-color: #475569;
+}
+
+.mcc-modal-mode:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.mcc-modal-mode-title {
+    font-size: 13px;
+    font-weight: 650;
+    color: #e2e8f0;
+}
+
+.mcc-modal-mode-signal {
+    font-size: 11px;
+    color: #64748b;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.mcc-modal-mode-active {
+    border-color: rgba(96, 165, 250, 0.55);
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.mcc-modal-mode-active .mcc-modal-mode-title {
+    color: #bfdbfe;
+}
+
+.mcc-modal-mode-force.mcc-modal-mode-active {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.mcc-modal-mode-force.mcc-modal-mode-active .mcc-modal-mode-title {
+    color: #fecaca;
+}

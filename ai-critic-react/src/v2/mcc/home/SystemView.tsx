@@ -270,6 +270,7 @@ export function SystemView() {
             )}
             {target && (
                 <SystemKillModal
+                    key={target.pid}
                     proc={target}
                     onClose={() => setTarget(null)}
                     onKilled={() => {
