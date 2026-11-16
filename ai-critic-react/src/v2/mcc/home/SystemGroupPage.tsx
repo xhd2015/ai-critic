@@ -117,11 +117,11 @@ export function SystemGroupPage() {
             </div>
             <div className="mcc-system-sub">System / group {groupName}</div>
             {loading && data == null && (
-                <div className="mcc-system-empty" style={{ margin: '0 16px' }}>Loading group…</div>
+                <div className="mcc-system-empty">Loading group…</div>
             )}
             {error && <div className="mcc-system-alert">{error}</div>}
             {data != null && forest.count === 0 && (
-                <div className="mcc-system-empty" style={{ margin: '0 16px' }}>
+                <div className="mcc-system-empty">
                     Group “{groupName}” is no longer running.
                 </div>
             )}

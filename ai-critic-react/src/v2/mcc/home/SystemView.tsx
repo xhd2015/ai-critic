@@ -128,7 +128,7 @@ export function SystemView() {
                 </div>
             )}
             {loading && data == null && (
-                <div className="mcc-system-empty" style={{ margin: '0 16px' }}>Loading processes…</div>
+                <div className="mcc-system-empty">Loading processes…</div>
             )}
             {error && (
                 <div className="mcc-system-alert">{error}</div>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>组详情手机左右留白过大 · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 860px; line-height: 1.6; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 11px 13px; margin-bottom: 22px; line-height: 1.65; max-width: 900px; }
+  .assump b { color: var(--blue); }
+  code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; }
+  .col { width: 422px; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.good { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+
+  .phone {
+    width: 390px; height: 720px; background: var(--bg); border-radius: 36px; overflow: hidden;
+    box-shadow: 0 0 0 8px #020617, 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column;
+  }
+  .shell { padding: 10px 16px; background: #1e293b; border-bottom: 1px solid #334155; font-size: 13px; font-weight: 650; color: #94a3b8; }
+  .page { flex: 1; overflow: hidden; padding-top: 8px; }
+  .hdr { display: flex; align-items: center; gap: 8px; padding: 8px var(--gutter) 10px; }
+  .hdr h2 { margin: 0; font-size: 20px; line-height: 28px; }
+  .g16 { --gutter: 16px; }
+  .g8 { --gutter: 8px; }
+
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 var(--gutter); margin-bottom: 8px; }
+  .tile { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 8px 10px; }
+  .tile .k { font-size: 9.5px; color: var(--mut); font-weight: 700; text-transform: uppercase; }
+  .tile .v { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .tip { margin: 0 var(--gutter) 8px; padding: 8px 10px; border-radius: 8px; font-size: 10px; color: #93c5fd; border: 1px dashed rgba(96,165,250,.35); background: rgba(96,165,250,.07); line-height: 1.45; }
+  .search { margin: 0 var(--gutter) 8px; background: var(--card); border: 1px solid var(--bd); border-radius: 8px; padding: 7px 10px; font-size: 12px; color: var(--mut); }
+  .chips { display: flex; gap: 6px; padding: 0 var(--gutter); margin-bottom: 8px; }
+  .chip { font-size: 10.5px; font-weight: 650; color: var(--sec); border: 1px solid var(--bd); border-radius: 999px; padding: 3px 9px; }
+  .list { padding: 0 var(--gutter); }
+  .card { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: minmax(0,1fr) 28px 28px; gap: 8px; align-items: center; padding: 10px; }
+  .row + .row { border-top: 1px solid rgba(51,65,85,.45); }
+  .head { display: grid; grid-template-columns: 18px minmax(0,1fr) auto auto; gap: 8px; align-items: center; min-width: 0; }
+  .n { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cpu { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--yellow); }
+  .mem { font-family: var(--mono); font-size: 12px; color: #94a3b8; min-width: 48px; text-align: right; }
+  .btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: var(--blue); display: grid; place-items: center; font-size: 14px; }
+  .kill { border-color: transparent; background: transparent; color: #94a3b8; }
+
+  .ruler { display: flex; margin: 8px var(--gutter) 0; font-size: 9px; font-weight: 800; color: #fca5a5; }
+  .g8 .ruler { color: #86efac; }
+  .ruler span { flex: none; }
+  .ruler i { flex: 1; border-top: 1px dashed currentColor; margin: 6px 4px 0; }
+
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+  .caption .bad { color: #fca5a5; } .caption .good { color: #86efac; }
+
+  .spec { margin-top: 36px; max-width: 900px; }
+  .spec h2 { font-size: 16px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--mut); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+  .note { font-size: 12px; color: #cbd5e1; line-height: 1.7; background: #0b1220; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 14px; margin-top: 18px; }
+  .note b { color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>组详情手机：左右 16px 井太宽</h1>
+  <p class="lead">
+    截图是 390 宽的手机。tiles / tip / search / chips / <code>.mcc-system-list</code> 各写了一遍
+    <code>padding/margin: 0 16px</code>。两边共 32px 空白，再加卡片内 10px，名字还要让给两个 28px 按钮，
+    于是 “Google Chrome · 55341” 被ellipsis成 “Google Chrome · 5…”。
+  </p>
+  <div class="assump">
+    <b>结论：</b>只在 <code>@media (max-width: 720px)</code> 里把 <code>.mcc-system</code> 这一页的水平 inset
+    从 16px 收到 <b>8px</b>（tiles、list、ptip、ptools、sub、section-header）。
+    桌面仍 16px。不贴边（0px），也不动卡片内部 padding 和按钮尺寸。
+  </div>
+
+  <div class="frames">
+    <div class="col">
+      <div class="col-h"><span class="tag bad">Before</span><h3>16px × 2 = 32px 空白</h3></div>
+      <div class="phone g16">
+        <div class="shell">☰ &nbsp; No Project</div>
+        <div class="page">
+          <div class="hdr"><h2>Google Chrome</h2></div>
+          <div class="tiles">
+            <div class="tile"><div class="k">Processes</div><div class="v">17</div></div>
+            <div class="tile"><div class="k">Oldest</div><div class="v">32m</div></div>
+          </div>
+          <div class="tip">Tap a parent to fold. The tree button opens the pid page.</div>
+          <div class="search">Filter 17 procs…</div>
+          <div class="chips"><span class="chip">Expand all</span><span class="chip">Collapse all</span></div>
+          <div class="list">
+            <div class="card">
+              <div class="row">
+                <div class="head"><span>▾</span><div><div class="n">Google Chrome · 55341</div><div class="s">xhd2015 · 32m · S</div></div><span class="cpu">0.3%</span><span class="mem">204 MB</span></div>
+                <span class="btn">›</span><span class="btn kill">⏻</span>
+              </div>
+              <div class="row">
+                <div class="head" style="padding-left:14px"><span>•</span><div><div class="n">Renderer · 55348</div><div class="s">xhd2015 · 32m · R</div></div><span class="cpu">22.3%</span><span class="mem">492 MB</span></div>
+                <span class="btn">›</span><span class="btn kill">⏻</span>
+              </div>
+            </div>
+          </div>
+          <div class="ruler"><span>16</span><i></i><span>358 content</span><i></i><span>16</span></div>
+        </div>
+      </div>
+      <p class="caption"><span class="bad">现状</span>：390 − 32 = 358px 给内容。名字列大约 147px，标题被切。</p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>手机 8px × 2 = 16px</h3></div>
+      <div class="phone g8">
+        <div class="shell">☰ &nbsp; No Project</div>
+        <div class="page">
+          <div class="hdr"><h2>Google Chrome</h2></div>
+          <div class="tiles">
+            <div class="tile"><div class="k">Processes</div><div class="v">17</div></div>
+            <div class="tile"><div class="k">Oldest</div><div class="v">32m</div></div>
+          </div>
+          <div class="tip">Tap a parent to fold. The tree button opens the pid page.</div>
+          <div class="search">Filter 17 procs…</div>
+          <div class="chips"><span class="chip">Expand all</span><span class="chip">Collapse all</span></div>
+          <div class="list">
+            <div class="card">
+              <div class="row">
+                <div class="head"><span>▾</span><div><div class="n">Google Chrome · 55341</div><div class="s">xhd2015 · 32m · S</div></div><span class="cpu">0.3%</span><span class="mem">204 MB</span></div>
+                <span class="btn">›</span><span class="btn kill">⏻</span>
+              </div>
+              <div class="row">
+                <div class="head" style="padding-left:14px"><span>•</span><div><div class="n">Renderer · 55348</div><div class="s">xhd2015 · 32m · R</div></div><span class="cpu">22.3%</span><span class="mem">492 MB</span></div>
+                <span class="btn">›</span><span class="btn kill">⏻</span>
+              </div>
+            </div>
+          </div>
+          <div class="ruler"><span>8</span><i></i><span>374 content</span><i></i><span>8</span></div>
+        </div>
+      </div>
+      <p class="caption"><span class="good">改后</span>：多出 16px 给名字列。顶栏、tiles、tip、搜索、列表共用同一个 8px，不会参差。</p>
+    </div>
+  </div>
+
+  <div class="spec">
+    <h2>规格</h2>
+    <table>
+      <thead><tr><th>选择器</th><th>现在</th><th>≤720px</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>.mcc-system-tiles</code> / <code>.mcc-system-list</code> / <code>.mcc-ptools</code></td>
+          <td><code>padding: 0 16px</code></td>
+          <td><code>padding-left/right: 8px</code></td>
+        </tr>
+        <tr>
+          <td><code>.mcc-ptip</code> / <code>.mcc-system-sub</code></td>
+          <td><code>margin … 16px</code></td>
+          <td><code>8px</code></td>
+        </tr>
+        <tr>
+          <td><code>.mcc-system .mcc-section-header</code></td>
+          <td>全局 header <code>20px 16px 12px</code></td>
+          <td>左右改 8px，避免返回键和卡片错位</td>
+        </tr>
+        <tr>
+          <td>卡片内 padding、28px 按钮、桌面</td>
+          <td colspan="2">不动。宽屏仍 16px</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>不贴边：</b>0px 会让卡片撞上屏幕圆角和拇指热区。8px 是 iOS 紧凑列表的常用井宽。
+      截图里的文案还是旧包（“use ›”），空白问题和包版本无关，CSS 层就是 16px。
+    </div>
+  </div>
+</div>
+</body>
+</html>

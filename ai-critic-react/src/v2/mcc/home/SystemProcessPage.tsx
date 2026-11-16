@@ -70,12 +70,12 @@ export function SystemProcessPage() {
             </div>
             <div className="mcc-system-sub">System / pid {pidParam}</div>
             {loading && data == null && (
-                <div className="mcc-system-empty" style={{ margin: '0 16px' }}>Loading process…</div>
+                <div className="mcc-system-empty">Loading process…</div>
             )}
             {error && <div className="mcc-system-alert">{error}</div>}
             {gone && <div className="mcc-system-alert">This process is no longer running. Showing last snapshot.</div>}
             {data != null && proc == null && (
-                <div className="mcc-system-empty" style={{ margin: '0 16px' }}>Process {pidParam} was not found.</div>
+                <div className="mcc-system-empty">Process {pidParam} was not found.</div>
             )}
             {proc != null && tree && (
                 <div className="mcc-system-pid">

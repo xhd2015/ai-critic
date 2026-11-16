@@ -396,6 +396,10 @@ button.mcc-system-disk:hover { border-color: #475569; }
     border-radius: 10px;
 }
 
+.mcc-system > .mcc-system-empty {
+    margin: 0 16px;
+}
+
 .mcc-system-pid {
     padding: 0 16px 24px;
 }
@@ -719,4 +723,35 @@ button.mcc-system-disk:hover { border-color: #475569; }
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
+}
+
+/* Phone: 16px gutters eat 32px before the card's own padding. 8px matches
+   a compact iOS list and lines the header up with tiles/list. */
+@media (max-width: 720px) {
+    .mcc-system .mcc-section-header {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .mcc-system-sub {
+        margin-left: 8px;
+        margin-right: 8px;
+    }
+
+    .mcc-system-tiles,
+    .mcc-system-kpis,
+    .mcc-system-controls,
+    .mcc-system-list,
+    .mcc-system-pid,
+    .mcc-ptools {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .mcc-system-alert,
+    .mcc-system > .mcc-system-empty,
+    .mcc-ptip {
+        margin-left: 8px;
+        margin-right: 8px;
+    }
 }
