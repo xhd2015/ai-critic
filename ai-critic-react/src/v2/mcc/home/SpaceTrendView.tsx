@@ -73,9 +73,10 @@ export default function SpaceTrendView() {
         <div className="mcc-system">
             <div className="mcc-section-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
+                    type="button"
                     className="mcc-back-btn"
                     onClick={() => navigate(-1)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                    aria-label="Back"
                 >
                     <BackIcon />
                 </button>

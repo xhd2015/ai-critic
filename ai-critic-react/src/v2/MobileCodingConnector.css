@@ -256,6 +256,7 @@ body:has(.mcc) {
     font-size: 20px;
     font-weight: 600;
     margin: 0;
+    line-height: 28px;
     color: #f1f5f9;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -882,15 +883,34 @@ body:has(.mcc) {
     color: #475569;
 }
 
-/* Back button */
+/* Back button. Text labels keep padding; SVG icons get a 28×28 flex box so they
+   sit on the same centre line as the 20px / 28px-line-height title. */
 .mcc-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     color: #60a5fa;
     font-size: 14px;
+    line-height: 1;
     cursor: pointer;
     padding: 4px 8px;
     margin-right: 8px;
+}
+
+.mcc-back-btn:has(svg) {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin: 0;
+    line-height: 0;
+    flex: none;
+}
+
+.mcc-back-btn svg {
+    display: block;
+    flex: none;
 }
 
 /* Diagnostics View */

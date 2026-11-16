@@ -323,7 +323,7 @@ export function ManageServerView() {
     return (
         <div className="mcc-manage-server">
             <div className="mcc-section-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button className="mcc-back-btn" onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <button type="button" className="mcc-back-btn" onClick={goBack} aria-label="Back">
                     <BackIcon />
                 </button>
                 <h2 style={{ margin: 0 }}>Manage Server</h2>

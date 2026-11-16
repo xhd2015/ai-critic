@@ -60,9 +60,10 @@ export default function DiskView() {
         <div className="mcc-system">
             <div className="mcc-section-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
+                    type="button"
                     className="mcc-back-btn"
                     onClick={() => navigate('..', { relative: 'path' })}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                    aria-label="Back"
                 >
                     <BackIcon />
                 </button>
