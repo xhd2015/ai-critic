@@ -141,7 +141,7 @@ export function SystemGroupPage() {
                         </div>
                     </div>
                     <div className="mcc-ptip">
-                        Kills are per-process: killing a parent leaves its children running. Tap a row for the full pid page.
+                        Kills are per-process: killing a parent leaves its children running. Tap a row to fold its subtree; use › to open the pid page.
                     </div>
                     <div className="mcc-ptools">
                         <input

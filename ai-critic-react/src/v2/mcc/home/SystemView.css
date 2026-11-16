@@ -227,7 +227,7 @@ button.mcc-system-disk:hover { border-color: #475569; }
    zeroes padding, but each button still centres its own glyph explicitly. */
 .mcc-system-gtree,
 .mcc-system-kill,
-.mcc-ptcaret {
+.mcc-ptopen {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
@@ -235,6 +235,7 @@ button.mcc-system-disk:hover { border-color: #475569; }
     padding: 0;
     margin: 0;
     min-width: 0;
+    width: 28px;
     height: 28px;
     border-radius: 6px;
     border: 1px solid transparent;
@@ -244,25 +245,28 @@ button.mcc-system-disk:hover { border-color: #475569; }
     cursor: pointer;
 }
 
-.mcc-system-gtree,
-.mcc-system-kill {
-    width: 28px;
-}
-
 .mcc-system-gtree {
     justify-self: center;
     align-self: center;
     font-size: 14px;
 }
 
-.mcc-system-gtree:hover {
-    background: rgba(96, 165, 250, 0.14);
+.mcc-system-gtree,
+.mcc-ptopen {
     color: #60a5fa;
-    border-color: transparent;
+    border-color: rgba(96, 165, 250, 0.35);
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.mcc-system-gtree:hover,
+.mcc-ptopen:hover {
+    background: rgba(96, 165, 250, 0.2);
+    color: #93c5fd;
 }
 
 .mcc-system-gtree svg,
-.mcc-system-kill svg {
+.mcc-system-kill svg,
+.mcc-ptopen svg {
     display: block;
     width: 15px;
     height: 15px;
@@ -659,7 +663,7 @@ button.mcc-system-disk:hover { border-color: #475569; }
 
 .mcc-ptrow {
     display: grid;
-    grid-template-columns: 16px 1fr auto auto 28px;
+    grid-template-columns: minmax(0, 1fr) 28px 28px;
     gap: 8px;
     align-items: center;
     padding: 9px 10px;
@@ -678,25 +682,42 @@ button.mcc-system-disk:hover { border-color: #475569; }
     background: rgba(96, 165, 250, 0.04);
 }
 
-.mcc-ptcaret {
-    width: 16px;
-    height: 16px;
-    font-size: 11px;
-}
-
-.mcc-ptcaret.leaf {
-    color: #475569;
-    cursor: default;
-}
-
-.mcc-ptmain {
+.mcc-ptbody {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
     min-width: 0;
     padding: 0;
+    margin: 0;
     border: 0;
     background: none;
     color: inherit;
     text-align: left;
     cursor: pointer;
+}
+
+.mcc-ptbody.leaf {
+    cursor: default;
+}
+
+.mcc-ptcaret {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.mcc-ptcaret.leaf {
+    color: #475569;
+}
+
+.mcc-ptwho {
+    min-width: 0;
 }
 
 .mcc-ptname {

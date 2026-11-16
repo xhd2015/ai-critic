@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>进程组行：点主体收起/展开，进详情另加一个按钮 · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 980px; line-height: 1.6; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 11px 13px; margin-bottom: 22px; line-height: 1.65; max-width: 1100px; }
+  .assump b { color: var(--blue); }
+  code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.good { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+  .tag.ref { color: #bfdbfe; background: rgba(96,165,250,.14); border: 1px solid rgba(96,165,250,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px;
+    border: 0; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; box-shadow: 0 0 0 8px #020617, 0 20px 50px rgba(0,0,0,.45);
+  }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 13px 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .topbar .back { width: 26px; height: 26px; border-radius: 8px; border: 0; background: transparent; color: var(--text); font-size: 17px; display: grid; place-items: center; }
+  .topbar .title { flex: 1; font-size: 15px; font-weight: 650; }
+  .live { font-size: 10.5px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); border-radius: 999px; padding: 2px 8px; }
+  .content { flex: 1; overflow: hidden; min-height: 0; }
+  .page { padding: 10px 16px 24px; }
+
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 9px; }
+  .tile { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 8px 10px; }
+  .tile .k { font-size: 9.5px; color: var(--mut); letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+  .tile .v { font-size: 14px; font-weight: 700; margin-top: 2px; font-family: var(--mono); }
+  .tile .s { font-size: 9.5px; color: var(--mut); margin-top: 1px; }
+
+  .chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .chip { font-size: 10.5px; font-weight: 650; color: var(--sec); background: var(--card); border: 1px solid var(--bd); border-radius: 999px; padding: 3px 9px; }
+  .tip { font-size: 10px; color: #93c5fd; background: rgba(96,165,250,.07); border: 1px dashed rgba(96,165,250,.35); border-radius: 8px; padding: 6px 9px; margin-bottom: 8px; line-height: 1.5; }
+
+  .ptree { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; margin: 0 16px; }
+  .ptrow { display: grid; grid-template-columns: 16px minmax(0,147px) 28.8125px 52px 28px; gap: 8px; align-items: center; padding: 9px 10px; border-top: 1px solid rgba(51,65,85,.45); position: relative; }
+  .ptree .ptrow:first-child { border-top: 0; }
+  .ptrow.root { background: rgba(96,165,250,.04); }
+  .caret { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--sec); border: 0; background: none; padding: 0; }
+  .caret.leaf { color: #475569; }
+  .pmain { min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+  .nm { display: block; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nm .pid { color: var(--mut); font-weight: 600; }
+  .nm .rootbadge { font-size: 9px; font-weight: 800; letter-spacing: .04em; color: var(--blue); background: rgba(96,165,250,.14); border: 1px solid rgba(96,165,250,.35); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+  .meta { display: block; font-size: 10px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .cpu { font-size: 11px; font-weight: 700; font-family: var(--mono); color: var(--sec); text-align: right; }
+  .cpu.hot { color: var(--red); } .cpu.warn { color: var(--yellow); }
+  .mem { font-size: 11px; font-family: var(--mono); color: var(--sec); text-align: right; }
+  .killbtn, .openbtn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent;
+    background: transparent; color: var(--sec); display: inline-flex; align-items: center;
+    justify-content: center; padding: 0;
+  }
+  .killbtn svg, .openbtn svg { width: 15px; height: 15px; display: block; }
+  .killbtn.lock { color: var(--mut); }
+  .openbtn { color: var(--blue); border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); font-size: 16px; font-weight: 650; }
+
+  /* AFTER: body (caret+name+cpu+mem) toggles | › opens | kill */
+  .ptrow.after { grid-template-columns: minmax(0,1fr) 28px 28px; gap: 8px; }
+  .body {
+    display: grid; grid-template-columns: 16px minmax(0,1fr) auto auto; gap: 8px;
+    align-items: center; min-width: 0; padding: 0; margin: 0; border: 0;
+    background: none; color: inherit; text-align: left; cursor: pointer;
+  }
+  .body.leaf { cursor: default; }
+  .body .caret { pointer-events: none; }
+
+  .tmap { display: flex; height: 30px; border-radius: 7px; overflow: hidden; margin: 12px 0 0 33px; width: 324px; border: 1px solid #1e293b; font-size: 9px; font-weight: 700; letter-spacing: .02em; }
+  .tmap.home { margin-left: 16px; width: 358px; }
+  .tmap div { display: grid; place-items: center; text-align: center; line-height: 1.15; padding: 0 2px; overflow: hidden; min-width: 0; flex: 0 0 auto; }
+  .tmap .g-tog { background: rgba(251,191,36,.22); color: #fde68a; }
+  .tmap .g-open { background: rgba(96,165,250,.24); color: #bfdbfe; }
+  .tmap .g-dead { background: repeating-linear-gradient(45deg, rgba(248,113,113,.22) 0 4px, rgba(248,113,113,.1) 4px 8px); color: #fecaca; }
+  .tmap .g-kill { background: rgba(148,163,184,.2); color: #e2e8f0; }
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+  .caption .bad { color: #fca5a5; } .caption .good { color: #86efac; }
+
+  .gcard { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; margin-bottom: 9px; overflow: hidden; }
+  .gwrap { display: grid; grid-template-columns: minmax(0,1fr) 32px; align-items: center; }
+  .ghead { display: grid; grid-template-columns: 22px minmax(0,1fr) auto auto; gap: 8px; align-items: center; padding: 10px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+  .gname { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .gname .sub { font-size: 11px; font-weight: 600; color: var(--mut); }
+  .gtree { width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--sec); display: inline-flex; align-items: center; justify-content: center; padding: 0; justify-self: center; }
+  .gtree svg { width: 15px; height: 15px; display: block; }
+  .gwrap.align { grid-template-columns: minmax(0,1fr) 28px; gap: 8px; padding-right: 10px; }
+  .gwrap.align .gtree { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: var(--blue); }
+  .grows { border-top: 1px solid rgba(51,65,85,.45); }
+  .grow { display: grid; grid-template-columns: 16px minmax(0,1fr) auto auto 28px; gap: 8px; align-items: center; padding: 8px 10px; border-top: 1px solid rgba(51,65,85,.3); }
+  .grows .grow:first-child { border-top: 0; }
+  .grow .nm { font-size: 11.5px; }
+  .grow .meta { font-size: 9.5px; }
+
+  .spec { margin-top: 40px; max-width: 1180px; }
+  .spec h2 { font-size: 16px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--mut); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+  td code { font-size: 10.5px; }
+  .note { font-size: 12px; color: #cbd5e1; line-height: 1.7; background: #0b1220; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 14px; margin-top: 18px; }
+  .note b { color: var(--blue); }
+  ul { margin: 6px 0 0; padding-left: 18px; }
+  li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>进程组行：点主体收起/展开，进详情另加一个按钮</h1>
+  <p class="lead">
+    目标页面 <code>/home/system/group/:name</code>（截图为 <code>/home/system/group/Opera</code>，390×844）。
+    现状：点名字那一块会跳到 <code>/home/system/pid/:pid</code>，折叠只有 16×16 的箭头，CPU / 内存 105px（行宽 32%）完全无响应。
+    用户点的是「整条 bar」，期望的是收起/展开，不是被拽进 pid 页。
+  </p>
+  <div class="assump">
+    <b>结论：</b>整条主体（▾ + 名字 + meta + CPU + 内存）＝<b>收起/展开子树</b>；
+    进入该进程的详情页改成右侧一个新的 <b>28×28 <code>›</code> 按钮</b>；kill 仍在最右。
+    这和 <code>/home/system</code> 组条已经在用的范式相同：<code>.mcc-system-ghead</code> 整条只折叠，<code>.mcc-system-gtree</code> 才进组页。
+    组详情行应对齐组条，而不是反过来。
+  </div>
+
+  <div class="frames">
+    <div class="col">
+      <div class="col-h"><span class="tag bad">Before</span><h3>组详情页 · 现在</h3></div>
+      <div class="phone">
+        <div class="topbar">
+          <button class="back">‹</button><div class="title">Opera</div>
+          <span class="live">2s · live</span>
+        </div>
+        <div class="content"><div class="page">
+          <div class="tiles">
+            <div class="tile"><div class="k">Group CPU</div><div class="v">46.8%</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Group RSS</div><div class="v">1.4 GB</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Processes</div><div class="v">12</div><div class="s">3 roots in group</div></div>
+            <div class="tile"><div class="k">Oldest</div><div class="v">2d1h</div><div class="s">uptime, e.g. 1d4h</div></div>
+          </div>
+          <div class="chips">
+            <span class="chip">Pause</span><span class="chip">Expand all</span><span class="chip">Collapse all</span>
+          </div>
+          <div class="tip">Kills are per-process: killing a parent leaves its children running. Tap a row for the full pid page.</div>
+          <div class="ptree">
+            <div class="ptrow root">
+              <button class="caret">▾</button>
+              <button class="pmain">
+                <span class="nm">Opera <span class="pid">· 3391</span><span class="rootbadge">root</span></span>
+                <span class="meta">xhd2015 · 2d1h · S · parent outside group</span>
+              </button>
+              <span class="cpu warn">12.4%</span><span class="mem">402 MB</span>
+              <button class="killbtn" title="Kill Opera · 3391"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:24px">
+              <button class="caret">▸</button>
+              <button class="pmain">
+                <span class="nm">Opera Helper (Renderer) <span class="pid">· 3402</span></span>
+                <span class="meta">xhd2015 · 1d4h · S</span>
+              </button>
+              <span class="cpu hot">31.2%</span><span class="mem">288 MB</span>
+              <button class="killbtn" title="Kill Opera Helper (Renderer) · 3402"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:24px">
+              <button class="caret">▸</button>
+              <button class="pmain">
+                <span class="nm">Opera Helper (GPU) <span class="pid">· 3404</span></span>
+                <span class="meta">xhd2015 · 1d4h · S</span>
+              </button>
+              <span class="cpu">2.6%</span><span class="mem">164 MB</span>
+              <button class="killbtn" title="Kill Opera Helper (GPU) · 3404"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:38px">
+              <button class="caret leaf">•</button>
+              <button class="pmain">
+                <span class="nm">Opera Helper <span class="pid">· 3409</span></span>
+                <span class="meta">xhd2015 · 6h12m · S</span>
+              </button>
+              <span class="cpu">0.3%</span><span class="mem">88 MB</span>
+              <button class="killbtn lock" title="Protected process"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:38px">
+              <button class="caret leaf">•</button>
+              <button class="pmain">
+                <span class="nm">Opera Helper (Network) <span class="pid">· 3411</span></span>
+                <span class="meta">xhd2015 · 6h12m · S</span>
+              </button>
+              <span class="cpu">0.1%</span><span class="mem">64 MB</span>
+              <button class="killbtn" title="Kill Opera Helper (Network) · 3411"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tmap">
+        <div class="g-tog" style="flex:16">▾</div>
+        <div class="g-dead" style="flex:147">主体 147px · 会跳 pid 页</div>
+        <div class="g-dead" style="flex:105">CPU+内存 105px · 无响应</div>
+        <div class="g-kill" style="flex:28">⏻</div>
+      </div>
+      <p class="caption">
+        <b>现状（实测 390px 行宽 324px）</b>：点名字就会离开这页进 pid 详情；
+        折叠热区只有 16×16；<span class="bad">32% 的像素点了没反应</span>。
+        想收起子树的人，最容易点到的那块反而把他们带走了。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>组详情页 · 改后</h3></div>
+      <div class="phone">
+        <div class="topbar">
+          <button class="back">‹</button><div class="title">Opera</div>
+          <span class="live">2s · live</span>
+        </div>
+        <div class="content"><div class="page">
+          <div class="tiles">
+            <div class="tile"><div class="k">Group CPU</div><div class="v">46.8%</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Group RSS</div><div class="v">1.4 GB</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Processes</div><div class="v">12</div><div class="s">3 roots in group</div></div>
+            <div class="tile"><div class="k">Oldest</div><div class="v">2d1h</div><div class="s">uptime, e.g. 1d4h</div></div>
+          </div>
+          <div class="chips">
+            <span class="chip">Pause</span><span class="chip">Expand all</span><span class="chip">Collapse all</span>
+          </div>
+          <div class="tip">Kills are per-process: killing a parent leaves its children running. Tap a row to fold its subtree; use › to open the pid page.</div>
+          <div class="ptree">
+            <div class="ptrow after root">
+              <button class="body" aria-label="Collapse subtree" aria-expanded="true">
+                <span class="caret">▾</span>
+                <span><span class="nm">Opera <span class="pid">· 3391</span><span class="rootbadge">root</span></span>
+                <span class="meta">xhd2015 · 2d1h · S · parent outside group</span></span>
+                <span class="cpu warn">12.4%</span><span class="mem">402 MB</span>
+              </button>
+              <button class="openbtn" title="Open Opera · 3391" aria-label="Open Opera · 3391">›</button>
+              <button class="killbtn" title="Kill Opera · 3391"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow after" style="padding-left:24px">
+              <button class="body" aria-label="Expand subtree" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span><span class="nm">Opera Helper (Renderer) <span class="pid">· 3402</span></span>
+                <span class="meta">xhd2015 · 1d4h · S</span></span>
+                <span class="cpu hot">31.2%</span><span class="mem">288 MB</span>
+              </button>
+              <button class="openbtn" title="Open Opera Helper (Renderer) · 3402" aria-label="Open Opera Helper (Renderer) · 3402">›</button>
+              <button class="killbtn" title="Kill Opera Helper (Renderer) · 3402"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow after" style="padding-left:24px">
+              <button class="body" aria-label="Expand subtree" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span><span class="nm">Opera Helper (GPU) <span class="pid">· 3404</span></span>
+                <span class="meta">xhd2015 · 1d4h · S</span></span>
+                <span class="cpu">2.6%</span><span class="mem">164 MB</span>
+              </button>
+              <button class="openbtn" title="Open Opera Helper (GPU) · 3404" aria-label="Open Opera Helper (GPU) · 3404">›</button>
+              <button class="killbtn" title="Kill Opera Helper (GPU) · 3404"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+            <div class="ptrow after" style="padding-left:38px">
+              <div class="body leaf">
+                <span class="caret leaf">•</span>
+                <span><span class="nm">Opera Helper <span class="pid">· 3409</span></span>
+                <span class="meta">xhd2015 · 6h12m · S</span></span>
+                <span class="cpu">0.3%</span><span class="mem">88 MB</span>
+              </div>
+              <button class="openbtn" title="Open Opera Helper · 3409" aria-label="Open Opera Helper · 3409">›</button>
+              <button class="killbtn lock" title="Protected process"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+            </div>
+            <div class="ptrow after" style="padding-left:38px">
+              <div class="body leaf">
+                <span class="caret leaf">•</span>
+                <span><span class="nm">Opera Helper (Network) <span class="pid">· 3411</span></span>
+                <span class="meta">xhd2015 · 6h12m · S</span></span>
+                <span class="cpu">0.1%</span><span class="mem">64 MB</span>
+              </div>
+              <button class="openbtn" title="Open Opera Helper (Network) · 3411" aria-label="Open Opera Helper (Network) · 3411">›</button>
+              <button class="killbtn" title="Kill Opera Helper (Network) · 3411"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tmap">
+        <div class="g-tog" style="flex:232">整条主体 232px · 收起/展开</div>
+        <div class="g-open" style="flex:28">›</div>
+        <div class="g-kill" style="flex:28">⏻</div>
+      </div>
+      <p class="caption">
+        <b>改后</b>：<span class="good">点 bar 的主要区域只折叠</span>。▾ 收进主体当指示，不再是 16px 热区。
+        进 pid 页是右边那个描了边的 28×28 <code>›</code>。叶子没有子树，主体不是按钮，进详情仍走 <code>›</code>。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag ref">参照</span><h3>/home/system · 组条已经是这套</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><div class="title">System</div><span class="live">2s · live</span></div>
+        <div class="content"><div class="page">
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead">
+                <span class="caret">▾</span>
+                <span class="gname">Opera <span class="sub">12</span></span>
+                <span class="cpu warn">46.8%</span><span class="mem">1.4 GB</span>
+              </button>
+              <button class="gtree" aria-label="Open Opera process tree" title="Open Opera process tree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="2" y="16" width="6" height="5" rx="1"/><rect x="16" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M5 16v-2h14v2"/></svg></button>
+            </div>
+            <div class="grows">
+              <div class="grow"><span></span><span><span class="nm">Opera <span class="pid">· 3391</span></span><span class="meta">xhd2015 · 2d1h · S</span></span><span class="cpu warn">12.4%</span><span class="mem">402 MB</span><button class="killbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button></div>
+              <div class="grow"><span></span><span><span class="nm">Opera Helper (Renderer) <span class="pid">· 3402</span></span><span class="meta">xhd2015 · 1d4h · S</span></span><span class="cpu hot">31.2%</span><span class="mem">288 MB</span><button class="killbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button></div>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead">
+                <span class="caret">▸</span>
+                <span class="gname">Google Chrome <span class="sub">284</span></span>
+                <span class="cpu hot">170.5%</span><span class="mem">8.3 GB</span>
+              </button>
+              <button class="gtree" aria-label="Open Google Chrome process tree" title="Open Google Chrome process tree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="2" y="16" width="6" height="5" rx="1"/><rect x="16" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M5 16v-2h14v2"/></svg></button>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead">
+                <span class="caret">▸</span>
+                <span class="gname">launchd <span class="sub">3</span></span>
+                <span class="cpu">0.4%</span><span class="mem">28 MB</span>
+              </button>
+              <button class="gtree" aria-label="Open launchd process tree" title="Open launchd process tree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="2" y="16" width="6" height="5" rx="1"/><rect x="16" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M5 16v-2h14v2"/></svg></button>
+            </div>
+          </div>
+          <div class="tip" style="margin-top:9px">Tap a group to fold it in place; use the tree button to open its process tree.</div>
+        </div></div>
+      </div>
+      <div class="tmap home">
+        <div class="g-tog" style="flex:324">▾ 整条 bar 只做展开/折叠</div>
+        <div class="g-open" style="flex:34">⋔</div>
+      </div>
+      <p class="caption">
+        <b>参照，不是问题</b>：<code>/home/system</code> 组条已经是「主体折叠 + 独立入口」。
+        组详情页的行要抄这一套，不要把组条改成点主体进页面。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>/home/system · 只对齐视觉</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><div class="title">System</div><span class="live">2s · live</span></div>
+        <div class="content"><div class="page">
+          <div class="gcard">
+            <div class="gwrap align">
+              <button class="ghead">
+                <span class="caret">▾</span>
+                <span class="gname">Opera <span class="sub">12</span></span>
+                <span class="cpu warn">46.8%</span><span class="mem">1.4 GB</span>
+              </button>
+              <button class="gtree" aria-label="Open Opera process tree" title="Open Opera process tree">›</button>
+            </div>
+            <div class="grows">
+              <div class="grow"><span></span><span><span class="nm">Opera <span class="pid">· 3391</span></span><span class="meta">xhd2015 · 2d1h · S</span></span><span class="cpu warn">12.4%</span><span class="mem">402 MB</span><button class="killbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button></div>
+              <div class="grow"><span></span><span><span class="nm">Opera Helper (Renderer) <span class="pid">· 3402</span></span><span class="meta">xhd2015 · 1d4h · S</span></span><span class="cpu hot">31.2%</span><span class="mem">288 MB</span><button class="killbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></button></div>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap align">
+              <button class="ghead">
+                <span class="caret">▸</span>
+                <span class="gname">Google Chrome <span class="sub">284</span></span>
+                <span class="cpu hot">170.5%</span><span class="mem">8.3 GB</span>
+              </button>
+              <button class="gtree" aria-label="Open Google Chrome process tree" title="Open Google Chrome process tree">›</button>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap align">
+              <button class="ghead">
+                <span class="caret">▸</span>
+                <span class="gname">launchd <span class="sub">3</span></span>
+                <span class="cpu">0.4%</span><span class="mem">28 MB</span>
+              </button>
+              <button class="gtree" aria-label="Open launchd process tree" title="Open launchd process tree">›</button>
+            </div>
+          </div>
+          <div class="tip" style="margin-top:9px">Tap a group to fold it in place; use › to open its process tree.</div>
+        </div></div>
+      </div>
+      <div class="tmap home">
+        <div class="g-tog" style="flex:324">▾ 整条 bar 仍只折叠</div>
+        <div class="g-open" style="flex:34">›</div>
+      </div>
+      <p class="caption">
+        <b>行为不变</b>：主体还是折叠，入口还是右边那个按钮。
+        可选的视觉对齐：把树形图标换成和组详情页一样的描边 <code>›</code>，两页用同一套「打开」语言。
+      </p>
+    </div>
+  </div>
+
+  <div class="spec">
+    <h2>规格</h2>
+    <table>
+      <thead><tr><th>项目</th><th>当前</th><th>改后</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>组详情行网格</td>
+          <td><code>.mcc-ptrow</code> = <code>16px 1fr auto auto 28px</code>，gap 8，<code>padding 9px 10px</code></td>
+          <td><code>minmax(0,1fr) 28px 28px</code>，gap 8，padding 不变。三列：主体 / <code>›</code> / kill</td>
+        </tr>
+        <tr>
+          <td>主体<br>（收起/展开）</td>
+          <td><code>.mcc-ptmain</code> 147px，<code>onClick → onOpen(proc)</code>，会离开本页进 pid 详情</td>
+          <td>主体吞掉 caret + 名字 + meta + CPU + 内存（232px），变成真正的折叠按钮；<code>onClick → onToggle(pid)</code>；<code>aria-expanded</code> 从 caret 挪到主体上。caret 降级为装饰性 ▾/▸，不再是独立热区</td>
+        </tr>
+        <tr>
+          <td>进入详情</td>
+          <td>没有独立入口。点名字就是进 pid 页</td>
+          <td>新增 <code>.mcc-ptopen</code> 28×28，描边 <code>rgba(96,165,250,.35)</code>，字色 <code>#60a5fa</code>，内容 <code>›</code>；<code>aria-label</code> / <code>title="Open &lt;name&gt; · &lt;pid&gt;"</code>；<code>onClick → onOpen(proc)</code></td>
+        </tr>
+        <tr>
+          <td>叶子行</td>
+          <td>caret <code>disabled</code>，主体仍会跳 pid 页</td>
+          <td>主体改成 <code>&lt;div&gt;</code>（不是按钮），caret 保持「•」；进详情只走 <code>›</code>。不给叶子行「点主体也进详情」的双重语义</td>
+        </tr>
+        <tr>
+          <td>无响应区</td>
+          <td>CPU + 内存 105px（32%）不响应</td>
+          <td>0 —— 并进折叠主体。叶子行的主体不可点，但右侧 <code>›</code> 仍在</td>
+        </tr>
+        <tr>
+          <td>无障碍</td>
+          <td>caret 有 <code>aria-expanded</code>；主体无 <code>title</code></td>
+          <td>折叠语义在主体按钮上；<code>›</code> 有 <code>aria-label</code>；主体 / <code>›</code> / kill 仍是兄弟，绝不嵌套</td>
+        </tr>
+        <tr>
+          <td>文案</td>
+          <td><code>.mcc-ptip</code>：Tap a row for the full pid page.</td>
+          <td>Tap a row to fold its subtree; use › to open the pid page.</td>
+        </tr>
+        <tr>
+          <td><code>/home/system</code> 组条</td>
+          <td><code>.mcc-system-ghead</code> 整条折叠；<code>.mcc-system-gtree</code> 进组详情。已经是目标范式</td>
+          <td><b>行为不改</b>。可选：<code>.mcc-system-gtree</code> 换成描边 <code>›</code>，和组详情页的打开按钮长一样。组内扁平进程行仍点整行进 pid 页（它们没有子树可折）</td>
+        </tr>
+        <tr>
+          <td>不变的部分</td>
+          <td colspan="2"><code>Expand all</code> / <code>Collapse all</code>、搜索、Pause、kill 弹窗、2s 轮询、<code>AUTO_COLLAPSE_THRESHOLD</code>、pid 详情页本身都不动。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <b>为什么主体必须是折叠、不能是进 pid 页：</b>
+      组详情页的主任务是在树里找进程、收起无关分枝。折叠是高频、不离开本页的动作，值得整条 bar。
+      进 pid 页是离开本页的导航，必须瞄准一个看得见的按钮，不能绑在「点 bar」上。
+      <code>/home/system</code> 组条已经按这个分了：点 bar 折叠，点 ⋔ 进组页。组详情行现在把这两件事接反了。
+      <ul>
+        <li>不建议叶子行「点主体也进详情」：同一手势两种含义，叶子和父节点点起来不一样。</li>
+        <li>不建议长按 / 双击进详情：手机端被系统手势占用，且不可发现。</li>
+        <li>不建议把 kill 挪进详情页：两页都靠行内 kill 做批量清理。</li>
+        <li>不建议再留一个 16px 独立 caret：caret 收进主体当状态指示即可，热区就是整条 bar。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>
