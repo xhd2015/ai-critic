@@ -4,6 +4,7 @@ import {
     allCollapsed,
     branchPids,
     buildGroupForest,
+    cardsFromVisible,
     defaultCollapsed,
     filterForest,
     flattenVisible,
@@ -100,6 +101,16 @@ test('collapsed pids hide their subtree', () => {
     assert.deepEqual(rows.map(r => r.node.proc.pid), [1, 2]);
     assert.equal(rows[1].hasChildren, true);
     assert.equal(rows[1].expanded, false);
+});
+
+test('cardsFromVisible puts each depth-0 root in its own card', () => {
+    const list = [proc(10, 'chrome', 1), proc(20, 'chrome', 1), proc(30, 'chrome', 10)];
+    const forest = buildGroupForest(list, 'chrome');
+    const cards = cardsFromVisible(flattenVisible(forest.roots, new Set()));
+    assert.deepEqual(cards.map(c => c.map(r => r.node.proc.pid)), [
+        [10, 30],
+        [20],
+    ]);
 });
 
 test('collapsing a leaf keeps it visible and marks it childless', () => {

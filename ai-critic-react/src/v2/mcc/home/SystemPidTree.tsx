@@ -1,16 +1,16 @@
 import { formatBytes, formatElapsed, type HostProcess } from '../../../api/processes';
-import { ChevronRightIcon } from '../../../pure-view/icons/ChevronRightIcon';
 import { LockBadgeIcon } from '../../../pure-view/icons/LockBadgeIcon';
 import { PowerIcon } from '../../../pure-view/icons/PowerIcon';
-import type { VisibleRow } from './groupTree';
+import { ProcessTreeIcon } from '../../../pure-view/icons/ProcessTreeIcon';
+import { cardsFromVisible, type VisibleRow } from './groupTree';
 import { processTitle } from './processTree';
 
 /**
- * Renders one group's process forest as indented rows.
+ * Group-detail forest, rendered with the same cards as /home/system.
  *
- * A row is not itself a button: the body (fold), the open action and the kill
- * action are siblings so keyboard and pointer targets never nest. The body
- * toggles a subtree; a leaf body is a div. Opening the pid page is the › button.
+ * Each depth-0 root is a `.mcc-system-group`. A branch uses `.mcc-system-ghead`
+ * to fold; a leaf body is a div. Kill sits left of `.mcc-system-gtree`, which
+ * opens the pid page — same trailing "open" slot as the home group bar.
  */
 export function SystemPidTree({
     rows,
@@ -27,75 +27,95 @@ export function SystemPidTree({
         return <div className="mcc-system-empty">No processes in this group match the filter.</div>;
     }
     return (
-        <div className="mcc-ptree">
-            {rows.map(({ node, depth, hasChildren, expanded }) => {
-                const proc = node.proc;
-                const parent = node.parentOutside;
-                const tags = proc.tags ?? [];
-                const title = processTitle(proc);
-                const openLabel = `Open ${title} · ${proc.pid}`;
-                const body = (
-                    <>
-                        <span className={`mcc-ptcaret${hasChildren ? '' : ' leaf'}`} aria-hidden="true">
-                            {hasChildren ? (expanded ? '▾' : '▸') : '•'}
-                        </span>
-                        <span className="mcc-ptwho">
-                            <span className="mcc-ptname">
-                                {title} · {proc.pid}
-                                {depth === 0 ? <span className="mcc-ptroot">root</span> : null}
-                                {tags.includes('stale') ? <span className="mcc-system-tag stale">stale</span> : null}
-                                {tags.includes('tun') ? <span className="mcc-system-tag tun">tunnel</span> : null}
-                                {proc.protected ? <span className="mcc-system-tag lock">protected</span> : null}
-                            </span>
-                            <span className="mcc-ptmeta">
-                                {proc.user} · {formatElapsed(proc.elapsed_sec)} · {proc.state}
-                                {depth === 0 ? (parent ? ` · parent ${processTitle(parent)} · ${parent.pid}` : ' · parent outside group') : ''}
-                            </span>
-                        </span>
-                        <span className={`mcc-system-cpu ${cpuClass(proc.cpu_percent)}`}>{proc.cpu_percent.toFixed(1)}%</span>
-                        <span className="mcc-system-mem">{formatBytes(proc.rss_bytes)}</span>
-                    </>
-                );
-                return (
-                    <div
-                        className={`mcc-ptrow${depth === 0 ? ' root' : ''}`}
-                        key={proc.pid}
-                        style={{ paddingLeft: 10 + depth * 14 }}
-                    >
-                        {hasChildren ? (
-                            <button
-                                type="button"
-                                className="mcc-ptbody"
-                                aria-expanded={expanded}
-                                aria-label={expanded ? 'Collapse subtree' : 'Expand subtree'}
-                                onClick={() => onToggle(proc.pid)}
-                            >
-                                {body}
-                            </button>
-                        ) : (
-                            <div className="mcc-ptbody leaf">{body}</div>
-                        )}
-                        <button
-                            type="button"
-                            className="mcc-ptopen"
-                            title={openLabel}
-                            aria-label={openLabel}
-                            onClick={() => onOpen(proc)}
-                        >
-                            <ChevronRightIcon />
-                        </button>
-                        <button
-                            type="button"
-                            className="mcc-system-kill"
-                            title={proc.protected || `Kill ${title} · ${proc.pid}`}
-                            disabled={!!proc.protected}
-                            onClick={() => onKill(proc)}
-                        >
-                            {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
-                        </button>
-                    </div>
-                );
-            })}
+        <div className="mcc-system-list">
+            {cardsFromVisible(rows).map(card => (
+                <div className="mcc-system-group" key={card[0].node.proc.pid}>
+                    {card.map(row => (
+                        <PidTreeRow
+                            key={row.node.proc.pid}
+                            row={row}
+                            onToggle={onToggle}
+                            onOpen={onOpen}
+                            onKill={onKill}
+                        />
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function PidTreeRow({
+    row,
+    onToggle,
+    onOpen,
+    onKill,
+}: {
+    row: VisibleRow;
+    onToggle: (pid: number) => void;
+    onOpen: (proc: HostProcess) => void;
+    onKill: (proc: HostProcess) => void;
+}) {
+    const { node, depth, hasChildren, expanded } = row;
+    const proc = node.proc;
+    const parent = node.parentOutside;
+    const tags = proc.tags ?? [];
+    const title = processTitle(proc);
+    const openLabel = `Open ${title} · ${proc.pid}`;
+    const pad = depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined;
+    const who = (
+        <>
+            <span>{hasChildren ? (expanded ? '▾' : '▸') : '•'}</span>
+            <div className="mcc-system-who">
+                <div className="mcc-system-n">
+                    {title} · {proc.pid}
+                    {tags.includes('stale') ? <span className="mcc-system-tag stale">stale</span> : null}
+                    {tags.includes('tun') ? <span className="mcc-system-tag tun">tunnel</span> : null}
+                    {proc.protected ? <span className="mcc-system-tag lock">protected</span> : null}
+                </div>
+                <div className="mcc-system-s">
+                    {proc.user} · {formatElapsed(proc.elapsed_sec)} · {proc.state}
+                    {depth === 0 ? (parent ? ` · parent ${processTitle(parent)} · ${parent.pid}` : ' · parent outside group') : ''}
+                </div>
+            </div>
+            <span className={`mcc-system-cpu ${cpuClass(proc.cpu_percent)}`}>{proc.cpu_percent.toFixed(1)}%</span>
+            <span className="mcc-system-mem">{formatBytes(proc.rss_bytes)}</span>
+        </>
+    );
+    return (
+        <div className="mcc-system-gwrap with-kill">
+            {hasChildren ? (
+                <button
+                    type="button"
+                    className="mcc-system-ghead"
+                    style={pad}
+                    aria-expanded={expanded}
+                    aria-label={expanded ? 'Collapse subtree' : 'Expand subtree'}
+                    onClick={() => onToggle(proc.pid)}
+                >
+                    {who}
+                </button>
+            ) : (
+                <div className="mcc-system-ghead leaf" style={pad}>{who}</div>
+            )}
+            <button
+                type="button"
+                className="mcc-system-kill"
+                title={proc.protected || `Kill ${title} · ${proc.pid}`}
+                disabled={!!proc.protected}
+                onClick={() => onKill(proc)}
+            >
+                {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
+            </button>
+            <button
+                type="button"
+                className="mcc-system-gtree"
+                title={openLabel}
+                aria-label={openLabel}
+                onClick={() => onOpen(proc)}
+            >
+                <ProcessTreeIcon />
+            </button>
         </div>
     );
 }

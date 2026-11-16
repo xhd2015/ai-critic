@@ -115,7 +115,7 @@ export function SystemGroupPage() {
                 </div>
             )}
             {data != null && forest.count > 0 && (
-                <div className="mcc-system-pid">
+                <>
                     <div className="mcc-system-tiles">
                         <div className="mcc-system-tile">
                             <div className="mcc-system-tile-lab">Group CPU</div>
@@ -141,7 +141,7 @@ export function SystemGroupPage() {
                         </div>
                     </div>
                     <div className="mcc-ptip">
-                        Kills are per-process: killing a parent leaves its children running. Tap a row to fold its subtree; use › to open the pid page.
+                        Kills are per-process: killing a parent leaves its children running. Tap a parent to fold its subtree; use the tree button to open the pid page.
                     </div>
                     <div className="mcc-ptools">
                         <input
@@ -174,7 +174,7 @@ export function SystemGroupPage() {
                         onOpen={proc => navigate(`../../pid/${proc.pid}`, { relative: 'path' })}
                         onKill={setKillTarget}
                     />
-                </div>
+                </>
             )}
             {killTarget && (
                 <SystemKillModal

@@ -218,16 +218,33 @@ button.mcc-system-disk:hover { border-color: #475569; }
     align-items: center;
 }
 
+/* Group-detail rows add kill left of the open button; open stays last. */
+.mcc-system-gwrap.with-kill {
+    grid-template-columns: minmax(0, 1fr) 32px 32px;
+}
+
+.mcc-system-gwrap.with-kill .mcc-system-kill {
+    justify-self: center;
+    align-self: center;
+}
+
+.mcc-system-group .mcc-system-gwrap + .mcc-system-gwrap {
+    border-top: 1px solid rgba(51, 65, 85, 0.45);
+}
+
 .mcc-system-ghead {
     grid-template-columns: 22px minmax(0, 1fr) auto auto;
     min-width: 0;
 }
 
+.mcc-system-ghead.leaf {
+    cursor: default;
+}
+
 /* Square icon buttons used across the System views. The global button reset
    zeroes padding, but each button still centres its own glyph explicitly. */
 .mcc-system-gtree,
-.mcc-system-kill,
-.mcc-ptopen {
+.mcc-system-kill {
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
@@ -249,24 +266,18 @@ button.mcc-system-disk:hover { border-color: #475569; }
     justify-self: center;
     align-self: center;
     font-size: 14px;
-}
-
-.mcc-system-gtree,
-.mcc-ptopen {
     color: #60a5fa;
     border-color: rgba(96, 165, 250, 0.35);
     background: rgba(96, 165, 250, 0.1);
 }
 
-.mcc-system-gtree:hover,
-.mcc-ptopen:hover {
+.mcc-system-gtree:hover {
     background: rgba(96, 165, 250, 0.2);
     color: #93c5fd;
 }
 
 .mcc-system-gtree svg,
-.mcc-system-kill svg,
-.mcc-ptopen svg {
+.mcc-system-kill svg {
     display: block;
     width: 15px;
     height: 15px;
@@ -651,103 +662,4 @@ button.mcc-system-disk:hover { border-color: #475569; }
 
 .mcc-ptools .mcc-system-search {
     margin: 0;
-}
-
-.mcc-ptree {
-    margin: 0 16px 8px;
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.mcc-ptrow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 28px 28px;
-    gap: 8px;
-    align-items: center;
-    padding: 9px 10px;
-    border-top: 1px solid rgba(51, 65, 85, 0.45);
-}
-
-.mcc-ptrow:first-child {
-    border-top: 0;
-}
-
-.mcc-ptrow:hover {
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.mcc-ptrow.root {
-    background: rgba(96, 165, 250, 0.04);
-}
-
-.mcc-ptbody {
-    display: grid;
-    grid-template-columns: 16px minmax(0, 1fr) auto auto;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-    padding: 0;
-    margin: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-
-.mcc-ptbody.leaf {
-    cursor: default;
-}
-
-.mcc-ptcaret {
-    width: 16px;
-    height: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    color: #94a3b8;
-    pointer-events: none;
-}
-
-.mcc-ptcaret.leaf {
-    color: #475569;
-}
-
-.mcc-ptwho {
-    min-width: 0;
-}
-
-.mcc-ptname {
-    display: block;
-    font-size: 12px;
-    font-weight: 650;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mcc-ptmeta {
-    display: block;
-    font-size: 10px;
-    color: #64748b;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: 2px;
-}
-
-.mcc-ptroot {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #60a5fa;
-    background: rgba(96, 165, 250, 0.12);
-    border-radius: 99px;
-    padding: 1px 6px;
-    margin-left: 5px;
-    vertical-align: middle;
 }

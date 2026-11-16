@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>组详情页复用 /home/system 列表组件 · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 1040px; line-height: 1.6; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 11px 13px; margin-bottom: 22px; line-height: 1.65; max-width: 1100px; }
+  .assump b { color: var(--blue); }
+  code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.good { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+  .tag.ref { color: #bfdbfe; background: rgba(96,165,250,.14); border: 1px solid rgba(96,165,250,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 0 0 8px #020617, 0 20px 50px rgba(0,0,0,.45);
+  }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 13px 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .topbar .back { width: 26px; height: 26px; border: 0; background: transparent; color: var(--text); font-size: 17px; }
+  .topbar .title { flex: 1; font-size: 15px; font-weight: 650; }
+  .live { font-size: 10.5px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); border-radius: 999px; padding: 2px 8px; }
+  .content { flex: 1; overflow: hidden; }
+  .page { padding: 10px 0 24px; }
+
+  .chips { display: flex; gap: 6px; margin: 0 16px 8px; flex-wrap: wrap; }
+  .chip { font-size: 10.5px; font-weight: 650; color: var(--sec); background: var(--card); border: 1px solid var(--bd); border-radius: 999px; padding: 3px 9px; }
+  .tip { font-size: 10px; color: #93c5fd; background: rgba(96,165,250,.07); border: 1px dashed rgba(96,165,250,.35); border-radius: 8px; padding: 6px 9px; margin: 0 16px 8px; line-height: 1.5; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 16px 9px; }
+  .tile { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 8px 10px; }
+  .tile .k { font-size: 9.5px; color: var(--mut); letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+  .tile .v { font-size: 14px; font-weight: 700; margin-top: 2px; font-family: var(--mono); }
+  .tile .s { font-size: 9.5px; color: var(--mut); margin-top: 1px; }
+
+  /* ===== copied from /home/system list ===== */
+  .mcc-system-list { padding: 0 16px; }
+  .mcc-system-group {
+    background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .mcc-system-ghead, .mcc-system-row {
+    display: grid; grid-template-columns: 22px 1fr auto auto 32px; gap: 8px;
+    align-items: center; width: 100%; padding: 10px; background: none; border: 0;
+    color: inherit; text-align: left; cursor: pointer;
+  }
+  .mcc-system-gwrap { display: grid; grid-template-columns: minmax(0,1fr) 32px; align-items: center; }
+  /* group-detail rows: body | kill | gtree. Open stays last, same as /home/system group bars. */
+  .mcc-system-gwrap.with-kill { grid-template-columns: minmax(0,1fr) 32px 32px; }
+  .mcc-system-ghead.leaf { cursor: default; }
+  .mcc-system-ghead { grid-template-columns: 22px minmax(0,1fr) auto auto; min-width: 0; }
+  .mcc-system-gtree, .mcc-system-kill {
+    box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; margin: 0; width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid transparent; background: transparent; color: #94a3b8; cursor: pointer;
+  }
+  .mcc-system-gtree { justify-self: center; align-self: center; color: #60a5fa; border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); }
+  .mcc-system-gtree svg, .mcc-system-kill svg { display: block; width: 15px; height: 15px; }
+  .mcc-system-row { border-top: 1px solid rgba(51,65,85,.45); }
+  .mcc-system-ghead:hover, .mcc-system-row:hover { background: rgba(255,255,255,.04); }
+  .mcc-system-who { min-width: 0; }
+  .mcc-system-n { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mcc-system-s { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mcc-system-cpu, .mcc-system-mem { font-family: var(--mono); font-size: 12px; font-weight: 700; text-align: right; }
+  .mcc-system-cpu.hot { color: #f87171; }
+  .mcc-system-cpu.warn { color: #fbbf24; }
+  .mcc-system-mem { color: #94a3b8; min-width: 52px; }
+  .mcc-system-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; margin-left: 4px; }
+  .mcc-system-tag.lock { background: #334155; color: #94a3b8; }
+  .caret { color: #94a3b8; font-size: 12px; }
+  .caret.leaf { color: #475569; }
+
+  /* ===== invented ptree (current group page) ===== */
+  .ptree { margin: 0 16px 8px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+  .ptrow { display: grid; grid-template-columns: minmax(0,1fr) 28px 28px; gap: 8px; align-items: center; padding: 9px 10px; border-top: 1px solid rgba(51,65,85,.45); }
+  .ptree .ptrow:first-child { border-top: 0; }
+  .ptrow.root { background: rgba(96,165,250,.04); }
+  .ptbody { display: grid; grid-template-columns: 16px minmax(0,1fr) auto auto; gap: 8px; align-items: center; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; }
+  .ptname { display: block; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptmeta { display: block; font-size: 10px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .ptopen { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: #60a5fa; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+  .ptcpu { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+  .ptcpu.hot { color: #f87171; } .ptcpu.warn { color: #fbbf24; }
+  .ptmem { font-family: var(--mono); font-size: 11px; color: #94a3b8; }
+  .ptroot { font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #60a5fa; background: rgba(96,165,250,.12); border-radius: 99px; padding: 1px 6px; margin-left: 5px; }
+
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+  .caption .bad { color: #fca5a5; } .caption .good { color: #86efac; }
+
+  .spec { margin-top: 40px; max-width: 1180px; }
+  .spec h2 { font-size: 16px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--mut); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+  .note { font-size: 12px; color: #cbd5e1; line-height: 1.7; background: #0b1220; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 14px; margin-top: 18px; }
+  .note b { color: var(--blue); }
+  ul { margin: 6px 0 0; padding-left: 18px; }
+  li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>组详情页不要新皮肤：直接用 /home/system 那套列表</h1>
+  <p class="lead">
+    <code>/home/system</code> 已经有完整的列表组件：<code>.mcc-system-group</code> 一张卡、
+    <code>.mcc-system-ghead</code> 整条折叠、<code>.mcc-system-gtree</code> 进页面、
+    <code>.mcc-system-row</code> 一条进程、13px 名字 / 11px 副行、padding 10、卡片间距 8。
+    组详情页却另起 <code>.mcc-ptree / .mcc-ptrow / .mcc-ptbody / .mcc-ptopen</code>，
+    12px 名字、9px 内边距、全塞进一张卡、右边再造一个 <code>›</code>。同一产品两条列表，两套皮。
+  </p>
+  <div class="assump">
+    <b>结论：</b>删掉 <code>.mcc-pt*</code> 行样式。组详情的森林用同一套 DOM：
+    每个 root 一张 <code>.mcc-system-group</code>。有子节点：点 <code>ghead</code> 折叠；叶子：点整行进 pid 页。
+    右侧固定两列，顺序是 <b>kill → 树标</b>，树标（进 pid 页）在最右，和首页组条的 <code>gtree</code> 一样贴右缘。kill 不放最后一个。
+  </div>
+
+  <div class="frames">
+    <div class="col">
+      <div class="col-h"><span class="tag ref">参照</span><h3>/home/system · 现有列表</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><div class="title">System</div><span class="live">2s · live</span></div>
+        <div class="content"><div class="page">
+          <div class="mcc-system-list">
+            <div class="mcc-system-group">
+              <div class="mcc-system-gwrap">
+                <button class="mcc-system-ghead">
+                  <span class="caret">▾</span>
+                  <div class="mcc-system-who"><div class="mcc-system-n">Opera · 12</div></div>
+                  <span class="mcc-system-cpu warn">46.8%</span>
+                  <span class="mcc-system-mem">1.4 GB</span>
+                </button>
+                <button class="mcc-system-gtree" title="Open Opera process tree" aria-label="Open Opera process tree">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+              <div class="mcc-system-row">
+                <span></span>
+                <div class="mcc-system-who">
+                  <div class="mcc-system-n">Opera · 3391</div>
+                  <div class="mcc-system-s">xhd2015 · 2d1h · /Applications/Opera.app</div>
+                </div>
+                <span class="mcc-system-cpu warn">12.4%</span>
+                <span class="mcc-system-mem">402 MB</span>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+              </div>
+              <div class="mcc-system-row">
+                <span></span>
+                <div class="mcc-system-who">
+                  <div class="mcc-system-n">Opera Helper (Renderer) · 3402</div>
+                  <div class="mcc-system-s">xhd2015 · 1d4h · Opera Helper</div>
+                </div>
+                <span class="mcc-system-cpu hot">31.2%</span>
+                <span class="mcc-system-mem">288 MB</span>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+              </div>
+            </div>
+            <div class="mcc-system-group">
+              <div class="mcc-system-gwrap">
+                <button class="mcc-system-ghead">
+                  <span class="caret">▸</span>
+                  <div class="mcc-system-who"><div class="mcc-system-n">Google Chrome · 284</div></div>
+                  <span class="mcc-system-cpu hot">170.5%</span>
+                  <span class="mcc-system-mem">8.3 GB</span>
+                </button>
+                <button class="mcc-system-gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+            <div class="mcc-system-group">
+              <div class="mcc-system-gwrap">
+                <button class="mcc-system-ghead">
+                  <span class="caret">▸</span>
+                  <div class="mcc-system-who"><div class="mcc-system-n">launchd · 3</div></div>
+                  <span class="mcc-system-cpu">0.4%</span>
+                  <span class="mcc-system-mem">28 MB</span>
+                </button>
+                <button class="mcc-system-gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption">
+        <b>这就是标准件</b>：一张卡一个组，<code>ghead</code> 13px 折叠，<code>gtree</code> 进组页，
+        展开后的进程是 <code>.mcc-system-row</code>，点整行进 pid，右边 ⏻。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag bad">Before</span><h3>组详情 · 现在另造一套</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><div class="title">Opera</div><span class="live">2s · live</span></div>
+        <div class="content"><div class="page">
+          <div class="tiles">
+            <div class="tile"><div class="k">Group CPU</div><div class="v">46.8%</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Group RSS</div><div class="v">1.4 GB</div><div class="s">Σ 12 procs</div></div>
+          </div>
+          <div class="chips"><span class="chip">Pause</span><span class="chip">Expand all</span><span class="chip">Collapse all</span></div>
+          <div class="tip">Tap a row to fold its subtree; use › to open the pid page.</div>
+          <div class="ptree">
+            <div class="ptrow root">
+              <button class="ptbody">
+                <span class="caret">▾</span>
+                <span><span class="ptname">Opera · 3391 <span class="ptroot">root</span></span><span class="ptmeta">xhd2015 · 2d1h · S</span></span>
+                <span class="ptcpu warn">12.4%</span><span class="ptmem">402 MB</span>
+              </button>
+              <button class="ptopen">›</button>
+              <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:24px">
+              <button class="ptbody">
+                <span class="caret">▸</span>
+                <span><span class="ptname">Opera Helper (Renderer) · 3402</span><span class="ptmeta">xhd2015 · 1d4h · S</span></span>
+                <span class="ptcpu hot">31.2%</span><span class="ptmem">288 MB</span>
+              </button>
+              <button class="ptopen">›</button>
+              <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:38px">
+              <div class="ptbody">
+                <span class="caret leaf">•</span>
+                <span><span class="ptname">Opera Helper · 3409</span><span class="ptmeta">xhd2015 · 6h12m · S</span></span>
+                <span class="ptcpu">0.3%</span><span class="ptmem">88 MB</span>
+              </div>
+              <button class="ptopen">›</button>
+              <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+            </div>
+            <div class="ptrow" style="padding-left:38px">
+              <div class="ptbody">
+                <span class="caret leaf">•</span>
+                <span><span class="ptname">Opera Helper (Network) · 3411</span><span class="ptmeta">xhd2015 · 6h12m · S</span></span>
+                <span class="ptcpu">0.1%</span><span class="ptmem">64 MB</span>
+              </div>
+              <button class="ptopen">›</button>
+              <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption">
+        <span class="bad">另造的皮肤</span>：一张卡塞整棵树，12px 字，9px 内边距，16px caret，自造 <code>›</code>。
+        和左边那页并排放，一眼就是两套 UI。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>组详情 · 同一套列表</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><div class="title">Opera</div><span class="live">2s · live</span></div>
+        <div class="content"><div class="page">
+          <div class="tiles">
+            <div class="tile"><div class="k">Group CPU</div><div class="v">46.8%</div><div class="s">Σ 12 procs</div></div>
+            <div class="tile"><div class="k">Group RSS</div><div class="v">1.4 GB</div><div class="s">Σ 12 procs</div></div>
+          </div>
+          <div class="chips"><span class="chip">Pause</span><span class="chip">Expand all</span><span class="chip">Collapse all</span></div>
+          <div class="tip">Tap a parent to fold its subtree; use the tree button to open the pid page. Kill sits left of the tree button.</div>
+          <div class="mcc-system-list">
+            <div class="mcc-system-group">
+              <div class="mcc-system-gwrap with-kill">
+                <button class="mcc-system-ghead" aria-expanded="true">
+                  <span class="caret">▾</span>
+                  <div class="mcc-system-who">
+                    <div class="mcc-system-n">Opera · 3391</div>
+                    <div class="mcc-system-s">xhd2015 · 2d1h · S · parent outside group</div>
+                  </div>
+                  <span class="mcc-system-cpu warn">12.4%</span>
+                  <span class="mcc-system-mem">402 MB</span>
+                </button>
+                <button class="mcc-system-kill" title="Kill Opera · 3391"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="mcc-system-gtree" title="Open Opera · 3391" aria-label="Open Opera · 3391">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+              <div class="mcc-system-gwrap with-kill" style="border-top:1px solid rgba(51,65,85,.45)">
+                <button class="mcc-system-ghead" aria-expanded="false" style="padding-left:24px">
+                  <span class="caret">▸</span>
+                  <div class="mcc-system-who">
+                    <div class="mcc-system-n">Opera Helper (Renderer) · 3402</div>
+                    <div class="mcc-system-s">xhd2015 · 1d4h · S</div>
+                  </div>
+                  <span class="mcc-system-cpu hot">31.2%</span>
+                  <span class="mcc-system-mem">288 MB</span>
+                </button>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="mcc-system-gtree" title="Open Opera Helper (Renderer) · 3402">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+              <div class="mcc-system-gwrap with-kill" style="border-top:1px solid rgba(51,65,85,.45)">
+                <div class="mcc-system-ghead leaf" style="padding-left:24px">
+                  <span class="caret leaf">•</span>
+                  <div class="mcc-system-who">
+                    <div class="mcc-system-n">Opera Helper · 3409 <span class="mcc-system-tag lock">protected</span></div>
+                    <div class="mcc-system-s">xhd2015 · 6h12m · S</div>
+                  </div>
+                  <span class="mcc-system-cpu">0.3%</span>
+                  <span class="mcc-system-mem">88 MB</span>
+                </div>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+                <button class="mcc-system-gtree" title="Open Opera Helper · 3409">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+              <div class="mcc-system-gwrap with-kill" style="border-top:1px solid rgba(51,65,85,.45)">
+                <div class="mcc-system-ghead leaf" style="padding-left:24px">
+                  <span class="caret leaf">•</span>
+                  <div class="mcc-system-who">
+                    <div class="mcc-system-n">Opera Helper (Network) · 3411</div>
+                    <div class="mcc-system-s">xhd2015 · 6h12m · S</div>
+                  </div>
+                  <span class="mcc-system-cpu">0.1%</span>
+                  <span class="mcc-system-mem">64 MB</span>
+                </div>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="mcc-system-gtree" title="Open Opera Helper (Network) · 3411">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="mcc-system-group">
+              <div class="mcc-system-gwrap with-kill">
+                <button class="mcc-system-ghead" aria-expanded="false">
+                  <span class="caret">▸</span>
+                  <div class="mcc-system-who">
+                    <div class="mcc-system-n">Opera Crash Handler · 3418</div>
+                    <div class="mcc-system-s">xhd2015 · 2d1h · S</div>
+                  </div>
+                  <span class="mcc-system-cpu">0.0%</span>
+                  <span class="mcc-system-mem">12 MB</span>
+                </button>
+                <button class="mcc-system-kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="mcc-system-gtree" title="Open Opera Crash Handler · 3418">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption">
+        <span class="good">同一套零件</span>：13px 名字、11px 副行、padding 10。右侧永远是 <code>⏻ kill</code> 再 <code>gtree</code> 进 pid 页——树标贴右缘，kill 不在最后一个。
+      </p>
+    </div>
+  </div>
+
+  <div class="spec">
+    <h2>规格</h2>
+    <table>
+      <thead><tr><th>项目</th><th>现在（另造）</th><th>改后（复用）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>列表容器</td>
+          <td><code>.mcc-ptree</code> 一张卡塞整棵树</td>
+          <td><code>.mcc-system-list</code>；每个 root 一张 <code>.mcc-system-group</code></td>
+        </tr>
+        <tr>
+          <td>有子节点的行</td>
+          <td><code>.mcc-ptbody</code> + 自造 <code>.mcc-ptopen ›</code></td>
+          <td><code>.mcc-system-gwrap</code> 三列：<code>ghead</code>（折叠）｜ <code>kill</code> ｜ <code>gtree</code>（进 pid 页，最右）。和首页组条一样，打开按钮贴右缘</td>
+        </tr>
+        <tr>
+          <td>叶子行</td>
+          <td>主体是 <code>div</code>，进详情只走 <code>›</code></td>
+          <td>同一套 <code>gwrap</code>：主体是 <code>div.mcc-system-ghead.leaf</code>（不折叠），然后 <code>kill</code> ｜ <code>gtree</code>。点树标进 pid 页。kill 仍不在最后一个</td>
+        </tr>
+        <tr>
+          <td>字号 / 间距</td>
+          <td>名字 12、副行 10、padding 9、caret 16</td>
+          <td>名字 13（<code>.mcc-system-n</code>）、副行 11（<code>.mcc-system-s</code>）、padding 10、caret 列 22px</td>
+        </tr>
+        <tr>
+          <td>打开按钮</td>
+          <td>新类 <code>.mcc-ptopen</code> + <code>ChevronRightIcon</code></td>
+          <td>继续用 <code>.mcc-system-gtree</code> + <code>ProcessTreeIcon</code>。<code>onClick</code> 在组详情里走 <code>onOpen(proc)</code>，在首页走 <code>onOpenGroup</code></td>
+        </tr>
+        <tr>
+          <td>要删的类</td>
+          <td colspan="2"><code>.mcc-ptree .mcc-ptrow .mcc-ptbody .mcc-ptopen .mcc-ptcaret .mcc-ptwho .mcc-ptname .mcc-ptmeta .mcc-ptroot</code>。页面提示条 <code>.mcc-ptip / .mcc-ptools</code> 可留，或改名成 <code>.mcc-system-*</code></td>
+        </tr>
+        <tr>
+          <td>缩进</td>
+          <td><code>paddingLeft: 10 + depth * 14</code> 写在 ptree 行上</td>
+          <td>同一公式写在 <code>ghead</code> / <code>row</code> 上。depth 0 不缩进，和首页组头对齐</td>
+        </tr>
+        <tr>
+          <td>不变</td>
+          <td colspan="2">顶栏、四块 tiles、Pause / Expand all / Collapse all、搜索、kill 弹窗、2s 轮询、<code>AUTO_COLLAPSE_THRESHOLD</code>、pid 详情页。首页组条行为也不改</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>为什么是复用而不是「看起来像」：</b>
+      组详情和首页已经共享 <code>processTitle</code>、<code>cpuClass</code>、<code>PowerIcon</code>、<code>LockBadgeIcon</code>。
+      差的就是 DOM 和 CSS。<code>SystemPidTree</code> 往 <code>.mcc-system-list</code> 里填 <code>gwrap / ghead / kill / gtree</code>，
+      列顺序固定为 <code>主体 | kill | gtree</code>。不要再为 12px 字号和 <code>›</code> 维护第二套皮肤。
+    </div>
+  </div>
+</div>
+</body>
+</html>

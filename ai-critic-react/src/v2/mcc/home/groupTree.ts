@@ -112,6 +112,16 @@ export function flattenVisible(roots: GroupNode[], collapsed: ReadonlySet<number
     return out;
 }
 
+/** Split a flattened walk into one card per depth-0 root, with its visible descendants. */
+export function cardsFromVisible(rows: VisibleRow[]): VisibleRow[][] {
+    const cards: VisibleRow[][] = [];
+    for (const row of rows) {
+        if (row.depth === 0 || cards.length === 0) cards.push([row]);
+        else cards[cards.length - 1].push(row);
+    }
+    return cards;
+}
+
 /** Every pid in the subtree, including the node itself. */
 export function subtreePids(node: GroupNode): number[] {
     const out: number[] = [];
