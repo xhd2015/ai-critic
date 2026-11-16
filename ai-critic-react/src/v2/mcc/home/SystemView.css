@@ -209,6 +209,33 @@ button.mcc-system-disk:hover { border-color: #475569; }
     cursor: pointer;
 }
 
+/* Group header row: the collapse toggle and the "open tree" action are siblings. */
+.mcc-system-gwrap {
+    display: grid;
+    grid-template-columns: 1fr 32px;
+    align-items: center;
+}
+
+.mcc-system-ghead {
+    grid-template-columns: 22px 1fr auto auto;
+}
+
+.mcc-system-gtree {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.mcc-system-gtree:hover {
+    background: rgba(96, 165, 250, 0.14);
+    color: #60a5fa;
+}
+
 .mcc-system-row {
     border-top: 1px solid rgba(51, 65, 85, 0.45);
     cursor: pointer;
@@ -601,4 +628,120 @@ button.mcc-system-disk:hover { border-color: #475569; }
 /* Child process rows line up under the app name column (chev 14 + gap 8 + icon 26). */
 .mcc-app-row {
     grid-template-columns: 48px 1fr auto auto 32px;
+}
+
+/* Group detail: pid tree */
+.mcc-ptip {
+    margin: 0 16px 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.mcc-ptools {
+    display: grid;
+    gap: 8px;
+    padding: 0 16px 8px;
+}
+
+.mcc-ptools .mcc-system-search {
+    margin: 0;
+}
+
+.mcc-ptree {
+    margin: 0 16px 8px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.mcc-ptrow {
+    display: grid;
+    grid-template-columns: 16px 1fr auto auto 28px;
+    gap: 8px;
+    align-items: center;
+    padding: 9px 10px;
+    border-top: 1px solid rgba(51, 65, 85, 0.45);
+}
+
+.mcc-ptrow:first-child {
+    border-top: 0;
+}
+
+.mcc-ptrow:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.mcc-ptrow.root {
+    background: rgba(96, 165, 250, 0.04);
+}
+
+.mcc-ptrow .mcc-system-kill {
+    min-width: 0;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.mcc-ptcaret {
+    width: 16px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.mcc-ptcaret.leaf {
+    color: #475569;
+    cursor: default;
+}
+
+.mcc-ptmain {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mcc-ptname {
+    display: block;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mcc-ptmeta {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.mcc-ptroot {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.12);
+    border-radius: 99px;
+    padding: 1px 6px;
+    margin-left: 5px;
+    vertical-align: middle;
 }

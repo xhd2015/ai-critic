@@ -20,6 +20,7 @@ export { FileTransferView } from './mcc/home/FileTransferView';
 export { ManageServerView } from './mcc/home/ManageServerView';
 export { SystemView } from './mcc/home/SystemView';
 export { SystemProcessPage } from './mcc/home/SystemProcessPage';
+export { SystemGroupPage } from './mcc/home/SystemGroupPage';
 export { default as DiskView } from './mcc/home/DiskView';
 export { default as SpaceAnalysisView } from './mcc/home/SpaceAnalysisView';
 export { default as SpaceHistoryView } from './mcc/home/SpaceHistoryView';

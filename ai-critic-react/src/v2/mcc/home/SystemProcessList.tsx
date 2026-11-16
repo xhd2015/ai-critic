@@ -9,12 +9,14 @@ export function SystemProcessList({
     lockedPids,
     onKill,
     onOpen,
+    onOpenGroup,
 }: {
     processes: HostProcess[];
     sort: ProcessSort;
     lockedPids?: number[] | null;
     onKill: (proc: HostProcess) => void;
     onOpen: (proc: HostProcess) => void;
+    onOpenGroup: (name: string) => void;
 }) {
     const groups = groupProcesses(processes, sort, lockedPids);
     const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -29,22 +31,33 @@ export function SystemProcessList({
                 const expanded = open[group.name] ?? group.procs.length <= 2;
                 return (
                     <div className="mcc-system-group" key={group.name}>
-                        <button
-                            type="button"
-                            className="mcc-system-ghead"
-                            onClick={() => setOpen(cur => ({ ...cur, [group.name]: !expanded }))}
-                        >
-                            <span>{expanded ? '▾' : '▸'}</span>
-                            <div className="mcc-system-who">
-                                <div className="mcc-system-n">
-                                    {group.name}
-                                    {group.procs.length > 1 ? ` · ${group.procs.length}` : ''}
+                        <div className="mcc-system-gwrap">
+                            <button
+                                type="button"
+                                className="mcc-system-ghead"
+                                aria-expanded={expanded}
+                                onClick={() => setOpen(cur => ({ ...cur, [group.name]: !expanded }))}
+                            >
+                                <span>{expanded ? '▾' : '▸'}</span>
+                                <div className="mcc-system-who">
+                                    <div className="mcc-system-n">
+                                        {group.name}
+                                        {group.procs.length > 1 ? ` · ${group.procs.length}` : ''}
+                                    </div>
                                 </div>
-                            </div>
-                            <span className={`mcc-system-cpu ${cpuClass(group.cpu)}`}>{group.cpu.toFixed(1)}%</span>
-                            <span className="mcc-system-mem">{formatBytes(group.rss)}</span>
-                            <span />
-                        </button>
+                                <span className={`mcc-system-cpu ${cpuClass(group.cpu)}`}>{group.cpu.toFixed(1)}%</span>
+                                <span className="mcc-system-mem">{formatBytes(group.rss)}</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="mcc-system-gtree"
+                                title={`Open ${group.name} process tree`}
+                                aria-label={`Open ${group.name} process tree`}
+                                onClick={() => onOpenGroup(group.name)}
+                            >
+                                ⋔
+                            </button>
+                        </div>
                         {expanded && group.procs.map(proc => (
                             <ProcessRow key={proc.pid} proc={proc} onKill={onKill} onOpen={onOpen} />
                         ))}

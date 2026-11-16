@@ -264,6 +264,7 @@ export function SystemView() {
                             lockedPids={lockedPids}
                             onKill={setTarget}
                             onOpen={proc => navigate(`pid/${proc.pid}`, { relative: 'path' })}
+                            onOpenGroup={name => navigate(`group/${encodeURIComponent(name)}`, { relative: 'path' })}
                         />
                     )}
                 </>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>System · Group detail + PID tree mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 18px 72px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 820px; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 20px; }
+  .frames { display: flex; flex-wrap: wrap; gap: 22px; }
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px;
+    border: 8px solid #020617; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; flex-shrink: 0; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  .caption { font-size: 12px; color: var(--mut); margin: 8px 0 0; max-width: 390px; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .proj { flex: 1; background: rgba(0,0,0,.22); border: 1px solid var(--bd); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .content { flex: 1; overflow: auto; min-height: 0; }
+  .page { padding: 12px 14px 28px; }
+  .bottomnav { display: flex; background: var(--card); border-top: 1px solid var(--bd); padding: 8px 0 10px; flex-shrink: 0; }
+  .nav-item { flex: 1; text-align: center; font-size: 10px; font-weight: 600; color: var(--mut); }
+  .nav-item.active { color: var(--blue); }
+
+  .page-h { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .page-h h2 { flex: 1; margin: 0; font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn { width: 30px; height: 30px; border: 0; background: transparent; color: var(--text); border-radius: 8px; cursor: pointer; font-size: 16px; }
+  .icon-btn:hover { background: rgba(255,255,255,.06); }
+  .crumb { font-size: 11px; color: var(--mut); margin: 0 0 10px 34px; }
+  .live { font-size: 11px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); border-radius: 999px; padding: 2px 8px; }
+  .chip-s { font-size: 11px; font-weight: 650; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--bd); background: transparent; color: var(--sec); cursor: pointer; }
+  .chip-s.on { background: rgba(96,165,250,.12); color: var(--blue); border-color: rgba(96,165,250,.4); }
+
+  /* list */
+  .search { width: 100%; min-height: 38px; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid #475569; background: var(--elev); color: var(--text); margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip { border: 1px solid var(--bd); background: transparent; color: var(--sec); font-size: 12px; font-weight: 650; padding: 5px 9px; border-radius: 999px; }
+  .chip.on { background: rgba(96,165,250,.12); color: var(--blue); border-color: rgba(96,165,250,.4); }
+  .group { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+  .gwrap { display: grid; grid-template-columns: 1fr 32px; align-items: stretch; background: none; border: 0; }
+  .ghead {
+    display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: center;
+    padding: 10px; width: 100%; background: none; border: 0; color: inherit; text-align: left; cursor: pointer;
+  }
+  .ghead:hover { background: rgba(255,255,255,.04); }
+  .gtree {
+    display: flex; align-items: center; justify-content: center; border: 0; border-left: 1px solid rgba(51,65,85,.7);
+    background: none; color: var(--sec); cursor: pointer; font-size: 15px; padding: 0;
+  }
+  .gtree:hover { background: rgba(96,165,250,.14); color: var(--blue); }
+  .row {
+    display: grid; grid-template-columns: 22px 1fr auto auto 32px; gap: 8px; align-items: center;
+    padding: 10px; width: 100%; background: none; border: 0; border-top: 1px solid rgba(51,65,85,.45); color: inherit; text-align: left; cursor: pointer;
+  }
+  .row:hover { background: rgba(96,165,250,.08); }
+  .n { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s { font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cpu { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .cpu.hot { color: var(--red); } .cpu.warn { color: var(--yellow); }
+  .mem { font-family: var(--mono); font-size: 11px; color: var(--sec); }
+  .kill { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--sec); cursor: pointer; font-size: 14px; }
+  .kill:hover { background: rgba(248,113,113,.16); color: var(--red); }
+  .kill.lock { opacity: .5; cursor: not-allowed; }
+
+  /* group page */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .tile { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 10px 12px; }
+  .tile-lab { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); font-weight: 700; }
+  .tile-val { font-family: var(--mono); font-size: 19px; font-weight: 700; margin-top: 2px; }
+  .tile-meta { font-size: 10px; color: var(--mut); margin-top: 1px; }
+  .hintbar { font-size: 11px; color: #cbd5e1; background: rgba(96,165,250,.08); border: 1px solid rgba(96,165,250,.28); border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; }
+  .toolbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .toolbar .search { margin: 0; flex: 1; min-height: 34px; font-size: 13px; }
+  .tree { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; }
+  .tnode { position: relative; }
+  .trow {
+    display: grid; grid-template-columns: 16px 1fr auto auto 28px; gap: 7px; align-items: center;
+    padding: 8px 10px 8px 0; border-top: 1px solid rgba(51,65,85,.42); cursor: pointer;
+  }
+  .tnode:first-child > .trow { border-top: 0; }
+  .trow:hover { background: rgba(96,165,250,.07); }
+  .tcaret { width: 16px; text-align: center; color: var(--mut); font-size: 10px; }
+  .tcaret.leaf { opacity: .25; }
+  .twho { min-width: 0; }
+  .tmeta { font-size: 10px; color: var(--mut); font-family: var(--mono); }
+  .troot { font-size: 9px; color: #93c5fd; background: rgba(96,165,250,.12); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+  .protected { font-size: 9px; color: #fca5a5; background: rgba(248,113,113,.14); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+
+  /* kill modal */
+  .overlay { position: absolute; inset: 0; background: rgba(2,6,23,.66); display: none; align-items: flex-end; z-index: 5; }
+  .overlay.show { display: flex; }
+  .sheet { width: 100%; background: var(--card); border-top-left-radius: 18px; border-top-right-radius: 18px; padding: 16px 16px 22px; border-top: 1px solid var(--bd); }
+  .sheet h3 { margin: 0 0 4px; font-size: 15px; }
+  .sheet .sub { font-size: 11px; color: var(--mut); margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: 92px 1fr; gap: 4px 10px; font-size: 12px; margin-bottom: 12px; }
+  .kv span { color: var(--mut); } .kv b { font-family: var(--mono); font-weight: 600; }
+  .modes { display: flex; gap: 8px; margin-bottom: 12px; }
+  .mode { flex: 1; border: 1px solid var(--bd); border-radius: 10px; padding: 8px 10px; background: transparent; color: var(--sec); text-align: left; cursor: pointer; }
+  .mode.on { border-color: rgba(248,113,113,.55); background: rgba(248,113,113,.1); color: #fecaca; }
+  .mode b { display: block; font-size: 12px; color: var(--text); }
+  .mode i { font-style: normal; font-size: 10px; color: var(--mut); }
+  .cmdbox { font-family: var(--mono); font-size: 11px; color: #93c5fd; background: #0b1220; border: 1px solid var(--bd); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; word-break: break-all; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn { padding: 10px; border-radius: 10px; border: 1px solid var(--bd); background: transparent; color: var(--text); font-size: 13px; font-weight: 650; cursor: pointer; }
+  .btn.danger { background: rgba(248,113,113,.16); border-color: rgba(248,113,113,.5); color: #fecaca; }
+
+  .toast { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); background: #0b1220; border: 1px solid var(--bd); color: var(--text); font-size: 12px; padding: 8px 12px; border-radius: 999px; opacity: 0; transition: opacity .18s; pointer-events: none; white-space: nowrap; z-index: 9; }
+  .toast.show { opacity: 1; }
+
+  .notes { margin-top: 26px; max-width: 900px; }
+  .notes h2 { font-size: 14px; margin: 18px 0 8px; }
+  .notes ul { margin: 0; padding-left: 18px; color: var(--sec); font-size: 12px; line-height: 1.7; }
+  .notes code { font-family: var(--mono); font-size: 11px; color: #93c5fd; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Group detail · PID tree mockup</h1>
+  <p class="lead">在 CPU 分析列表里，每个 Group 头部右侧新增树按钮 → 进入 <code>/home/system/group/:name</code> 详情页。详情页用缩进树展示该 Group 内 pid/ppid 拓扑，每行给出 CPU / Mem / Uptime，并在树上直接提供 Kill。</p>
+  <div class="assump">
+    <b>Assumptions</b> · 路由 <code>/home/system/group/Google%20Chrome</code>（name 即现有分组键，encodeURIComponent）· 仍复用 <code>/api/server/processes</code> 快照，不新增后端接口 · 树只在该 Group 成员内连边（跨组父进程以 “root · parent launchd” 标注）· Kill 复用现有 Kill Modal（Graceful / Force Quit），一次只杀一个 pid。
+  </div>
+
+  <div class="frames">
+    <div>
+      <div class="phone" id="phoneA">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content" id="viewA"></div>
+        <div class="toast" id="toastA"></div>
+        <div class="bottomnav">
+          <div class="nav-item active">⌂<br>Home</div>
+          <div class="nav-item">✦<br>Agent</div>
+          <div class="nav-item">&gt;_<br>Terminal</div>
+          <div class="nav-item">◎<br>Services</div>
+          <div class="nav-item">☰<br>Files</div>
+        </div>
+      </div>
+      <p class="caption">可交互：Group 头右侧 <b>⋔</b> → 组详情；点箭头折叠/展开分支；⏻ 打开 Kill；点标题行 → pid 详情页（占位）。</p>
+    </div>
+
+    <div>
+      <div class="phone" id="phoneB">
+        <div class="topbar"><span>☰</span><div class="proj">No Project ▾</div><span>👤</span></div>
+        <div class="content" id="viewB"></div>
+        <div class="toast" id="toastB"></div>
+        <div class="bottomnav">
+          <div class="nav-item active">⌂<br>Home</div>
+          <div class="nav-item">✦<br>Agent</div>
+          <div class="nav-item">&gt;_<br>Terminal</div>
+          <div class="nav-item">◎<br>Services</div>
+          <div class="nav-item">☰<br>Files</div>
+        </div>
+      </div>
+      <p class="caption">静态：组详情页 + 已打开 Kill modal（Force Quit 选中态）。折叠一个分支、另一分支展开，展示树的可读性。</p>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>组详情页信息架构</h2>
+    <ul>
+      <li><b>Header</b> ← 返回 · Group 名 · live 2s / Pause（与 System 页一致）</li>
+      <li><b>Tiles</b> Group CPU Σ · Group RSS Σ · Process count · Oldest uptime（即 “2d12h” 这类格式）</li>
+      <li><b>Hint</b> “Kills are per-process; killing a parent leaves its children running.”（明确语义，不做隐式级联）</li>
+      <li><b>Tree</b> 组内 pid/ppid 缩进树；每行 title · pid / user · uptime · state / CPU / MEM / ⏻</li>
+      <li><b>Roots</b> 组内没有可见父进程的节点标 <span style="color:#93c5fd">root</span>，并在第二行注明 <code>parent launchd · 1</code>（跨组）或 <code>parent … (outside group)</code></li>
+      <li><b>Kill</b> 行内 ⏻ → 现有 Kill Modal（Graceful / Force Quit）；protected 显示 🔒 且禁用</li>
+      <li><b>行点击</b> → 既有 <code>/home/system/pid/:pid</code> 详情页（保留 command / identity / 父链下钻）</li>
+      <li>v1 不做：组级连环 kill（kill subtree）、跨组完整进程树、组内搜索高亮之外的过滤</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const PROCS = [
+  // Google Chrome group (headless root 13678 spawned by launchd, screenshot data)
+  { pid: 13678, ppid: 1, name: "Google Chrome", user: "xhd2015", cpu: 3.3, rss: 108_000_000, elapsed: "2d12h", state: "S",
+    cmd: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --hide-scrollbars --no-first-run --remote-debugging-port=0 --user-data-dir=/var/folders/s_/…" },
+  { pid: 13697, ppid: 13678, name: "Google Chrome", user: "xhd2015", cpu: 3.3, rss: 100_000_000, elapsed: "2d12h", state: "S",
+    cmd: "…/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --renderer-client-id=2609" },
+  { pid: 13689, ppid: 13697, name: "Google Chrome", user: "xhd2015", cpu: 12.5, rss: 65_000_000, elapsed: "2d12h", state: "S",
+    cmd: "…/Google Chrome Helper (Aperitif).app/Contents/MacOS/Google Chrome Helper (Aperitif) --type=utility --utility-sub-type=network.mojom.NetworkService" },
+  { pid: 78810, ppid: 13689, name: "Google Chrome", user: "xhd2015", cpu: 1.5, rss: 36_000_000, elapsed: "2d16h", state: "S",
+    cmd: "…/Google Chrome Helper (Aperitif) --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US" },
+  { pid: 31273, ppid: 13697, name: "Google Chrome", user: "xhd2015", cpu: 0.6, rss: 105_000_000, elapsed: "2d10h", state: "S",
+    cmd: "…/Google Chrome Helper (Renderer) --type=renderer --renderer-client-id=2122" },
+  { pid: 13440, ppid: 13697, name: "Google Chrome", user: "xhd2015", cpu: 0.6, rss: 97_000_000, elapsed: "2d12h", state: "S",
+    cmd: "…/Google Chrome Helper (Renderer) --type=renderer --renderer-client-id=2101" },
+  { pid: 42549, ppid: 13440, name: "Google Chrome", user: "xhd2015", cpu: 0.9, rss: 83_000_000, elapsed: "3d", state: "S",
+    cmd: "…/Google Chrome Helper (Renderer) --type=renderer --renderer-client-id=1180" },
+  { pid: 38696, ppid: 1, name: "Google Chrome", user: "xhd2015", cpu: 1.2, rss: 94_000_000, elapsed: "2d19h", state: "S",
+    cmd: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --hide-scrollbars --no-first-run --remote-debugging-port=0 --user-data-dir=/var/folders/s_/…" },
+  { pid: 42520, ppid: 38696, name: "Google Chrome", user: "xhd2015", cpu: 0.3, rss: 71_000_000, elapsed: "3d", state: "S",
+    cmd: "…/Google Chrome Helper (Renderer) --type=renderer --renderer-client-id=1179" },
+  { pid: 9931, ppid: 42520, name: "Google Chrome", user: "xhd2015", cpu: 0.2, rss: 58_000_000, elapsed: "3d", state: "S",
+    cmd: "…/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU) --type=gpu-process --gpu-preferences=…" },
+  // node group for list contrast
+  { pid: 4211, ppid: 1, name: "node", user: "xhd2015", cpu: 4.1, rss: 180_000_000, elapsed: "1d3h", state: "S",
+    cmd: "node /usr/local/bin/agent-run web --port 8194" },
+  { pid: 4388, ppid: 4211, name: "node", user: "xhd2015", cpu: 1.8, rss: 96_000_000, elapsed: "1d3h", state: "S",
+    cmd: "node --experimental-strip-types /Applications/…/dsh web" },
+  { pid: 2274, ppid: 1, name: "node", user: "xhd2015", cpu: 0.9, rss: 120_000_000, elapsed: "9h12m", state: "S",
+    cmd: "node /Users/xhd2015/Projects/xhd2015/deepseek-harness/bin/dsh web --port 3080" },
+  { pid: 36301, ppid: 1, name: "ai-critic", user: "xhd2015", cpu: 2.4, rss: 88_000_000, elapsed: "2d1h", state: "S",
+    cmd: "/Users/xhd2015/.local/bin/ai-critic server --port 23712" },
+];
+
+const GONE = new Set();
+const state = { expanded: new Set(), collapsed: new Set(), stack: ["list"], kill: null, mode: "force" };
+
+function fmtBytes(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
+  if (n >= 1e6) return Math.round(n / 1e6) + " MB";
+  return Math.round(n / 1024) + " KB";
+}
+function cpuClass(n) { return n >= 80 ? "hot" : n >= 20 ? "warn" : ""; }
+function alive() { return PROCS.filter(p => !GONE.has(p.pid)); }
+function byPid(id) { return alive().find(p => p.pid === id); }
+function role(p) {
+  if (p.name !== "Google Chrome") return p.name;
+  if (p.cmd.includes("--type=renderer")) return "Renderer";
+  if (p.cmd.includes("--type=gpu")) return "GPU";
+  if (p.cmd.includes("NetworkService")) return "Network";
+  return "Google Chrome";
+}
+function groupMembers(name) { return alive().filter(p => p.name === name); }
+function groupTotals(name) {
+  const m = groupMembers(name);
+  return {
+    count: m.length,
+    cpu: m.reduce((s, p) => s + p.cpu, 0),
+    rss: m.reduce((s, p) => s + p.rss, 0),
+    oldest: m.reduce((s, p) => (uptimeSec(p.elapsed) > uptimeSec(s) ? p.elapsed : s), "0s"),
+  };
+}
+function uptimeSec(txt) {
+  const m = /^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(txt);
+  if (!m) return 0;
+  return (+(m[1] || 0)) * 86400 + (+(m[2] || 0)) * 3600 + (+(m[3] || 0)) * 60 + (+(m[4] || 0));
+}
+function groupNames() {
+  const seen = [];
+  alive().forEach(p => { if (!seen.includes(p.name)) seen.push(p.name); });
+  return seen.sort((a, b) => groupTotals(b).cpu - groupTotals(a).cpu);
+}
+
+/* ---------- list ---------- */
+function listHTML() {
+  const rows = groupNames().map(name => {
+    const t = groupTotals(name);
+    const open = state.expanded.has(name) || name === "Google Chrome";
+    const members = groupMembers(name).slice().sort((a, b) => b.cpu - a.cpu).slice(0, 6);
+    const body = open ? members.map(p => `
+      <div class="row" data-pid="${p.pid}" role="button" tabindex="0">
+        <span></span>
+        <div class="twho">
+          <div class="n">${role(p)} · ${p.pid}</div>
+          <div class="s">${p.user} · ${p.elapsed} · ${p.cmd}</div>
+        </div>
+        <span class="cpu ${cpuClass(p.cpu)}">${p.cpu.toFixed(1)}%</span>
+        <span class="mem">${fmtBytes(p.rss)}</span>
+        <button class="kill" data-kill="${p.pid}" title="Kill">⏻</button>
+      </div>`).join("") : "";
+    return `
+      <div class="group">
+        <div class="gwrap">
+          <button class="ghead" data-group="${name}">
+            <span>${open ? "▾" : "▸"}</span>
+            <div class="twho"><div class="n">${name} · ${t.count}</div></div>
+            <span class="cpu ${cpuClass(t.cpu)}">${t.cpu.toFixed(1)}%</span>
+            <span class="mem">${fmtBytes(t.rss)}</span>
+          </button>
+          <button class="gtree" data-open-group="${name}" title="Open ${name} group detail">⋔</button>
+        </div>
+        ${body}
+      </div>`;
+  }).join("");
+  return `
+    <div class="page">
+      <div class="page-h">
+        <button class="icon-btn">←</button>
+        <h2>System</h2>
+        <span class="live">2s</span>
+        <button class="chip-s">Pause</button>
+      </div>
+      <div class="crumb" style="margin-left:0">10 cores · ${alive().length} processes · host of this page</div>
+      <input class="search" placeholder="Filter by name, pid, command…" />
+      <div class="chips">
+        <button class="chip on">CPU ↓</button><button class="chip">Memory</button>
+        <button class="chip">Name</button><button class="chip">PID</button><button class="chip">Lock order</button>
+      </div>
+      <div class="list">${rows}</div>
+      <p class="caption" style="margin-top:10px">⋔ = 组详情页；组名左箭头仍控制展开。</p>
+    </div>`;
+}
+
+/* ---------- group page ---------- */
+function buildForest(name) {
+  const members = groupMembers(name);
+  const ids = new Set(members.map(p => p.pid));
+  const kids = new Map();
+  members.forEach(p => { kids.set(p.pid, []); });
+  const roots = [];
+  members.forEach(p => {
+    if (ids.has(p.ppid) && p.ppid !== p.pid) kids.get(p.ppid).push(p);
+    else roots.push(p);
+  });
+  kids.forEach(arr => arr.sort((a, b) => b.cpu - a.cpu));
+  roots.sort((a, b) => b.cpu - a.cpu);
+  return { roots, kids };
+}
+
+function nodeHTML(p, depth, forest, collapsed) {
+  const kids = forest.kids.get(p.pid) || [];
+  const open = !collapsed.has(p.pid);
+  const parent = PROCS.find(q => q.pid === p.ppid);
+  const rootTag = depth === 0
+    ? `<span class="troot">${parent ? "root · parent " + role(parent) + " · " + parent.pid : "root"}</span>`
+    : "";
+  const lock = p.protected ? `<span class="protected">protected</span>` : "";
+  const self = `
+    <div class="trow" data-pid="${p.pid}" style="padding-left:${10 + depth * 14}px">
+      <span class="tcaret ${kids.length ? "" : "leaf"}" data-toggle="${p.pid}">${kids.length ? (open ? "▾" : "▸") : "•"}</span>
+      <div class="twho">
+        <div class="n">${role(p)} · ${p.pid}${rootTag}${lock}</div>
+        <div class="tmeta">${p.user} · ${p.elapsed} · ${p.state}${depth === 0 && parent ? " · parent outside group" : ""}</div>
+      </div>
+      <span class="cpu ${cpuClass(p.cpu)}">${p.cpu.toFixed(1)}%</span>
+      <span class="mem">${fmtBytes(p.rss)}</span>
+      <button class="kill" data-kill="${p.pid}" title="Kill">⏻</button>
+    </div>`;
+  const children = kids.length && open ? kids.map(k => nodeHTML(k, depth + 1, forest, collapsed)).join("") : "";
+  return self + children;
+}
+
+function groupHTML(name, collapsed) {
+  const t = groupTotals(name);
+  const forest = buildForest(name);
+  const tree = forest.roots.map(r => nodeHTML(r, 0, forest, collapsed)).join("");
+  return `
+    <div class="page">
+      <div class="page-h">
+        <button class="icon-btn" data-list>←</button>
+        <h2>${name} · ${t.count}</h2>
+        <span class="live">2s</span>
+        <button class="chip-s">Pause</button>
+      </div>
+      <div class="crumb">System / group ${name}</div>
+      <div class="tiles">
+        <div class="tile"><div class="tile-lab">Group CPU</div><div class="tile-val ${cpuClass(t.cpu)}">${t.cpu.toFixed(1)}%</div><div class="tile-meta">Σ ${t.count} procs</div></div>
+        <div class="tile"><div class="tile-lab">Group RSS</div><div class="tile-val">${fmtBytes(t.rss)}</div><div class="tile-meta">Σ ${t.count} procs</div></div>
+        <div class="tile"><div class="tile-lab">Processes</div><div class="tile-val">${t.count}</div><div class="tile-meta">${forest.roots.length} root${forest.roots.length === 1 ? "" : "s"} in group</div></div>
+        <div class="tile"><div class="tile-lab">Oldest</div><div class="tile-val">${t.oldest}</div><div class="tile-meta">uptime, e.g. 2d1h</div></div>
+      </div>
+      <div class="hintbar">Kills are per-process: killing a parent leaves its children running. Tap a row for the full pid page.</div>
+      <div class="toolbar">
+        <input class="search" placeholder="Filter in group…" />
+        <button class="chip-s" data-expand-all>Expand</button>
+        <button class="chip-s" data-collapse-all>Collapse</button>
+      </div>
+      <div class="tree">${tree}</div>
+      <p class="caption" style="margin-top:10px">Tree edges use pid/ppid inside this group only; members whose parent belongs to another group are shown as roots.</p>
+    </div>`;
+}
+
+/* ---------- render ---------- */
+function renderA() {
+  const root = document.getElementById("viewA");
+  const cur = state.stack[state.stack.length - 1];
+  root.innerHTML = cur === "list" ? listHTML() : groupHTML(cur, state.collapsed);
+  root.scrollTop = 0;
+}
+
+function renderB() {
+  const root = document.getElementById("viewB");
+  root.innerHTML = groupHTML("Google Chrome", new Set([13697])) + killSheet(42549);
+}
+
+function toast(el, msg) {
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1600);
+}
+
+function killSheet(pid) {
+  const p = byPid(pid);
+  if (!p) return "";
+  const sig = state.mode === "force" ? "KILL" : "TERM";
+  return `
+    <div class="overlay show">
+      <div class="sheet">
+        <h3>Kill Process</h3>
+        <div class="sub">Send ${sig} to ${role(p)} · ${p.pid}</div>
+        <div class="kv">
+          <span>Name</span><b>${p.name}</b>
+          <span>PID</span><b>${p.pid}</b>
+          <span>User</span><b>${p.user}</b>
+          <span>CPU / RSS</span><b>${p.cpu.toFixed(1)}% · ${fmtBytes(p.rss)}</b>
+        </div>
+        <div class="modes">
+          <button class="mode ${state.mode === "graceful" ? "on" : ""}" data-mode="graceful"><b>Graceful</b><i>SIGTERM · 15</i></button>
+          <button class="mode ${state.mode === "force" ? "on" : ""}" data-mode="force"><b>Force Quit</b><i>SIGKILL · 9</i></button>
+        </div>
+        <div class="cmdbox">kill -${sig === "KILL" ? 9 : 15} ${p.pid}</div>
+        <div class="acts">
+          <button class="btn" data-cancel>Cancel</button>
+          <button class="btn danger" data-confirm="${p.pid}">${state.mode === "force" ? "Force Quit" : "Kill Process"}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- events (frame A) ---------- */
+function wire(root, toastEl) {
+  root.addEventListener("click", e => {
+    if (e.target.closest("[data-list]")) { state.stack = ["list"]; renderA(); return; }
+    const og = e.target.closest("[data-open-group]");
+    if (og) { state.stack.push(og.dataset.openGroup); renderA(); return; }
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) {
+      e.stopPropagation();
+      const id = Number(tg.dataset.toggle);
+      if (state.collapsed.has(id)) state.collapsed.delete(id); else state.collapsed.add(id);
+      renderA(); return;
+    }
+    if (e.target.closest("[data-expand-all]")) { state.collapsed.clear(); renderA(); return; }
+    if (e.target.closest("[data-collapse-all]")) {
+      const name = state.stack[state.stack.length - 1];
+      groupMembers(name).forEach(p => state.collapsed.add(p.pid));
+      renderA(); return;
+    }
+    const g = e.target.closest("[data-group]");
+    if (g) {
+      const name = g.dataset.group;
+      if (name === "Google Chrome" || state.expanded.has(name)) state.expanded.delete(name);
+      else state.expanded.add(name);
+      renderA(); return;
+    }
+    const k = e.target.closest("[data-kill]");
+    if (k) { e.stopPropagation(); openKill(root, toastEl, Number(k.dataset.kill)); return; }
+    const row = e.target.closest("[data-pid]");
+    if (row) { toast(toastEl, "Open pid " + row.dataset.pid + " detail page"); return; }
+  });
+}
+
+function openKill(root, toastEl, pid) {
+  const p = byPid(pid);
+  state.mode = "graceful";
+  root.insertAdjacentHTML("beforeend", killSheet(pid));
+  const ov = root.querySelector(".overlay");
+  ov.addEventListener("click", e => {
+    if (e.target === ov || e.target.closest("[data-cancel]")) { ov.remove(); return; }
+    const m = e.target.closest("[data-mode]");
+    if (m) { state.mode = m.dataset.mode; ov.remove(); openKill(root, toastEl, pid); return; }
+    const c = e.target.closest("[data-confirm]");
+    if (c) { GONE.add(Number(c.dataset.confirm)); ov.remove(); renderA(); toast(toastEl, "Killed " + p.pid); }
+  });
+}
+
+renderA();
+wire(document.getElementById("viewA"), document.getElementById("toastA"));
+renderB();
+document.getElementById("viewB").addEventListener("click", e => {
+  const t = document.getElementById("toastB");
+  if (e.target.closest("[data-cancel]") || e.target.closest(".overlay")) {
+    const ov = document.querySelector("#viewB .overlay");
+    if (ov) ov.style.display = "none";
+  }
+  if (e.target.closest("[data-toggle]")) toast(t, "Caret toggles the branch (interactive in the left phone)");
+  if (e.target.closest("[data-kill]")) toast(t, "Kill opens the same modal");
+});
+</script>
+</body>
+</html>
