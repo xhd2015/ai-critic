@@ -1,4 +1,6 @@
 import { formatBytes, formatElapsed, type HostProcess } from '../../../api/processes';
+import { LockBadgeIcon } from '../../../pure-view/icons/LockBadgeIcon';
+import { PowerIcon } from '../../../pure-view/icons/PowerIcon';
 import type { VisibleRow } from './groupTree';
 import { processTitle } from './processTree';
 
@@ -66,7 +68,7 @@ export function SystemPidTree({
                             disabled={!!proc.protected}
                             onClick={() => onKill(proc)}
                         >
-                            {proc.protected ? '🔒' : '⏻'}
+                            {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
                         </button>
                     </div>
                 );

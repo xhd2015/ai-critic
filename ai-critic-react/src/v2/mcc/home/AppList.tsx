@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { formatBytes, formatElapsed, type HostProcess } from '../../../api/processes';
 import type { InstalledApp } from '../../../api/apps';
+import { LockBadgeIcon } from '../../../pure-view/icons/LockBadgeIcon';
+import { PowerIcon } from '../../../pure-view/icons/PowerIcon';
 import { appInitials, appStatusText } from './appFilters';
 import { processTitle } from './processTree';
 
@@ -93,11 +95,11 @@ export function AppList({
                                         if (main) onKill(main);
                                     }}
                                 >
-                                    ⏻
+                                    <PowerIcon />
                                 </button>
                             ) : (
                                 <span className="mcc-system-kill dis" title="Not running">
-                                    ⏻
+                                    <PowerIcon />
                                 </span>
                             )}
                         </div>
@@ -158,7 +160,7 @@ function AppProcessRow({
                     onKill(proc);
                 }}
             >
-                {proc.protected ? '🔒' : '⏻'}
+                {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
             </button>
         </div>
     );

@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { formatBytes, formatElapsed, type HostProcess } from '../../../api/processes';
+import { LockBadgeIcon } from '../../../pure-view/icons/LockBadgeIcon';
+import { PowerIcon } from '../../../pure-view/icons/PowerIcon';
+import { ProcessTreeIcon } from '../../../pure-view/icons/ProcessTreeIcon';
 import { groupProcesses, type ProcessSort } from './groupProcesses';
 import { processTitle } from './processTree';
 
@@ -55,7 +58,7 @@ export function SystemProcessList({
                                 aria-label={`Open ${group.name} process tree`}
                                 onClick={() => onOpenGroup(group.name)}
                             >
-                                ⋔
+                                <ProcessTreeIcon />
                             </button>
                         </div>
                         {expanded && group.procs.map(proc => (
@@ -91,7 +94,7 @@ function ProcessRow({ proc, onKill, onOpen }: { proc: HostProcess; onKill: (proc
                 title={proc.protected || 'Kill'}
                 onClick={e => { e.stopPropagation(); onKill(proc); }}
             >
-                {proc.protected ? '🔒' : '⏻'}
+                {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
             </button>
         </div>
     );

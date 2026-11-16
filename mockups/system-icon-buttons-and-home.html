@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>System icon buttons + home entry · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 900px; line-height: 1.55; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 22px; line-height: 1.6; }
+  .assump code, .lead code, .spec code, p code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.good { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px;
+    border: 8px solid #020617; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.55; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 13px 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .topbar .back { width: 26px; height: 26px; border-radius: 8px; border: 0; background: transparent; color: var(--text); font-size: 17px; display: grid; place-items: center; }
+  .topbar .title { flex: 1; font-size: 15px; font-weight: 650; }
+  .live { font-size: 10.5px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); border-radius: 999px; padding: 2px 8px; }
+  .content { flex: 1; overflow: hidden; min-height: 0; }
+  .page { padding: 10px 16px 24px; }
+
+  /* ---- system list ---- */
+  .gcard { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; margin-bottom: 9px; overflow: hidden; position: relative; }
+  .gwrap { display: grid; grid-template-columns: 1fr 32px; align-items: center; }
+  .ghead {
+    display: grid; grid-template-columns: 22px minmax(0,1fr) auto auto; gap: 8px; align-items: center;
+    padding: 10px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0;
+  }
+  .gname { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .gname .sub { font-size: 11px; font-weight: 600; color: var(--mut); }
+  .caret { font-size: 11px; color: var(--sec); text-align: center; }
+  .cpu { font-size: 11.5px; font-weight: 700; font-family: var(--mono); color: var(--sec); text-align: right; }
+  .cpu.hot { color: var(--red); }
+  .cpu.warn { color: var(--yellow); }
+  .mem { font-size: 11.5px; font-family: var(--mono); color: var(--sec); text-align: right; }
+  .rows { border-top: 1px solid rgba(51,65,85,.45); }
+  .row {
+    display: grid; grid-template-columns: 22px minmax(0,1fr) auto auto 32px; gap: 8px; align-items: center;
+    padding: 8px 10px; border-top: 1px solid rgba(51,65,85,.45); width: 100%; background: none; border-left: 0; border-right: 0;
+    color: inherit; text-align: left; cursor: pointer;
+  }
+  .rows .row:first-child { border-top: 0; }
+  .row .who { min-width: 0; }
+  .row .nm { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .meta { display: block; font-size: 10.5px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* icon buttons — AFTER: what we ship */
+  .gtree, .kill {
+    box-sizing: border-box; width: 28px; height: 28px; padding: 0; margin: 0;
+    border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--sec);
+    display: inline-flex; align-items: center; justify-content: center;
+    line-height: 1; font-size: 14px; cursor: pointer; justify-self: center; align-self: center;
+  }
+  .gtree:hover { background: rgba(96,165,250,.14); color: var(--blue); border-color: transparent; }
+  .kill:hover { background: rgba(239,68,68,.14); color: var(--red); border-color: transparent; }
+  .gtree svg, .kill svg { width: 15px; height: 15px; display: block; }
+
+  /* icon buttons — BEFORE: leak from index.css `button { padding: 0.6em 1.2em; }` */
+  .bad .gtree, .bad .kill { display: block; text-align: center; line-height: normal; justify-self: start; }
+  .bad .gtree { width: 28px; height: 28px; padding: 8.4px 16.8px; font-size: 14px; }   /* -> 35.6px wide */
+  .bad .kill { width: 28px; height: 28px; padding: 9.6px 19.2px; font-size: 16px; }    /* -> 40.4px wide */
+  .bad .gtree { border-color: #646cff; }  /* global button:hover border-color */
+  .bad .gtree:hover, .bad .kill:hover { border-color: #646cff; }
+
+  /* ---- home ---- */
+  .home-h { display: flex; align-items: center; gap: 8px; padding: 14px 16px 8px; }
+  .home-h h2 { margin: 0; font-size: 15px; }
+  .section-h { padding: 8px 16px 6px; }
+  .section-h h2 { margin: 0; font-size: 15px; }
+  .strip {
+    margin: 12px 16px 0; background: var(--card); border: 1px solid var(--bd); border-radius: 10px;
+    padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    text-align: left; color: inherit; width: calc(100% - 32px);
+  }
+  .strip-t { display: flex; align-items: center; gap: 8px; }
+  .strip-t b { font-size: 13px; }
+  .kpis { display: flex; gap: 10px; margin-top: 6px; font-size: 10.5px; color: var(--mut); font-family: var(--mono); }
+  .kpis b { color: #cbd5e1; }
+  .strip-go { font-size: 11.5px; font-weight: 650; color: var(--blue); white-space: nowrap; }
+  .proj-card { margin: 0 16px 9px; background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 11px 12px; display: flex; align-items: center; gap: 10px; }
+  .proj-ic { width: 28px; height: 28px; border-radius: 8px; background: rgba(96,165,250,.14); color: var(--blue); display: grid; place-items: center; font-size: 13px; flex-shrink: 0; }
+  .proj-n { font-size: 13px; font-weight: 650; }
+  .proj-s { font-size: 10.5px; color: var(--mut); margin-top: 2px; }
+  .home-btn { margin: 0 16px 8px; width: calc(100% - 32px); background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 11px 12px; color: var(--text); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .home-btn.primary { color: var(--blue); }
+  .drawer-note { margin: 12px 16px 0; border: 1px dashed rgba(96,165,250,.45); background: rgba(96,165,250,.07); border-radius: 10px; padding: 10px 12px; font-size: 11px; color: #bfdbfe; line-height: 1.55; }
+  .drawer-mini { margin: 10px 16px 0; background: var(--card); border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+  .drawer-mini .dm-h { padding: 9px 12px; font-size: 11px; font-weight: 700; color: var(--mut); border-bottom: 1px solid var(--bd); }
+  .drawer-mini .dm-i { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; font-size: 12px; color: var(--sec); border-bottom: 1px solid rgba(51,65,85,.4); }
+  .drawer-mini .dm-i:last-child { border-bottom: 0; }
+  .drawer-mini .dm-i.hl { color: var(--text); font-weight: 650; background: rgba(96,165,250,.1); }
+  .drawer-mini .dm-i em { font-style: normal; font-size: 10px; color: var(--blue); }
+
+  /* ---- zoom ---- */
+  .zoomrow { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 34px; }
+  .zoom { width: 330px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 14px; }
+  .zoom h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); }
+  .zoom .num { font-family: var(--mono); font-size: 11px; color: #cbd5e1; margin: 0 0 12px; line-height: 1.6; }
+  .zoom .num b { color: var(--red); }
+  .zoom.ok .num b { color: var(--green); }
+  .stage { position: relative; height: 132px; display: grid; place-items: center; background:
+      linear-gradient(90deg, rgba(148,163,184,.09) 1px, transparent 1px) 0 0 / 11px 11px,
+      linear-gradient(0deg, rgba(148,163,184,.09) 1px, transparent 1px) 0 0 / 11px 11px, #0f172a;
+      border-radius: 8px; }
+  .slot { position: relative; width: 96px; height: 96px; outline: 1px dashed rgba(148,163,184,.35); outline-offset: 0; }
+  .slot span.lbl { position: absolute; top: -16px; left: 0; font-size: 9px; font-family: var(--mono); color: var(--mut); }
+  .stage .bigbtn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .cross { position: absolute; left: 50%; top: 50%; width: 96px; height: 96px; transform: translate(-50%,-50%); pointer-events: none; }
+  .cross::before, .cross::after { content: ""; position: absolute; background: rgba(248,113,113,.55); }
+  .cross::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+  .cross::after { top: 50%; left: 0; right: 0; height: 1px; }
+  .zoom.ok .cross::before, .zoom.ok .cross::after { background: rgba(34,197,94,.5); }
+  /* 3x scaled copies of the real buttons */
+  .x3 { zoom: 3; }
+  .x3 .gtree, .x3 .kill { justify-self: auto; }
+  .x3 .bad-gtree { box-sizing: border-box; width: 28px; height: 28px; padding: 8.4px 16.8px; border: 1px solid #646cff; border-radius: 6px; background: rgba(96,165,250,.14); color: var(--blue); font-size: 14px; line-height: normal; text-align: center; display: block; }
+  .x3 .bad-kill { box-sizing: border-box; width: 28px; height: 28px; padding: 9.6px 19.2px; border: 1px solid #646cff; border-radius: 6px; background: rgba(239,68,68,.14); color: var(--red); font-size: 16px; line-height: normal; text-align: center; display: block; }
+
+  /* ---- spec ---- */
+  .spec { margin-top: 38px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 16px 18px; }
+  .spec h3 { margin: 0 0 10px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--mut); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  td.before { color: #fca5a5; font-family: var(--mono); font-size: 11px; }
+  td.after { color: #86efac; font-family: var(--mono); font-size: 11px; }
+  .note { font-size: 11.5px; color: var(--mut); margin: 12px 0 0; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>System 页图标按钮修复 + 主页移除 System 入口</h1>
+  <p class="lead">
+    对应两处 UI 问题：(1) 分组行右侧 <code>⋔</code> 按钮被卡片右边缘裁掉；(2) 同一行与树行里的 <code>⏻</code> / <code>🔒</code> 按钮比 32px 栅格槽更宽、图标不居中。
+    以及入口收敛：主页 <code>/home</code> 顶部去掉 System 卡片，只保留侧边栏 Menu → System Monitor。
+  </p>
+  <div class="assump">
+    <b>截图量到的真实数据（Chrome 390×844，运行中的 QA 实例）</b><br />
+    · <code>.mcc-system-gtree</code>：声明 28×28，实际 <b>35.6×28</b>，padding 8.4/16.8，右边缘 376.6px，分组卡右边缘 374px → <b>被 overflow:hidden 裁掉 4px</b>。<br />
+    · <code>.mcc-system-row .mcc-system-kill</code>：声明 28×28，实际 <b>40.4×28</b>，padding 9.6/19.2，图标中心相对按钮中心偏移 <b>dx +10.0 / dy +10.6</b>。<br />
+    · 根因：<code>ai-critic-react/src/index.css:88</code> 的全局 <code>button { padding: 0.6em 1.2em; border: 1px solid transparent }</code> 泄漏进了这两个“只有宽高、没有 padding 归零”的图标按钮；<code>box-sizing:border-box</code> 下 padding 超过 28px 时盒子被撑到 35.6 / 40.4px。<br />
+    · 蓝圈是全局 <code>button:hover { border-color:#646cff }</code> 画的，不是设计意图。
+  </div>
+
+  <div class="frames">
+    <!-- ============ BEFORE: system list ============ -->
+    <div class="col">
+      <div class="col-h"><span class="tag bad">Before</span><h3>System · 分组列表</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><span class="title">System</span><span class="live">Live</span></div>
+        <div class="content"><div class="page bad" id="before-list">
+          <!-- group 1 -->
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="true">
+                <span class="caret">▾</span>
+                <span class="gname">Google Chrome <span class="sub">23</span></span>
+                <span class="cpu hot">268.4%</span><span class="mem">1.2 GB</span>
+              </button>
+              <button class="gtree" title="Open Google Chrome process tree" data-anno="gtree">⋔</button>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">Google Chrome</span><span class="meta">xhd2015 · 4h12m · /Applications/…</span></span>
+                <span class="cpu hot">112.6%</span><span class="mem">402 MB</span>
+                <button class="kill" data-anno="kill">⏻</button>
+              </div>
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">Google Chrome Helper (Renderer)</span><span class="meta">xhd2015 · 4h12m · /Applications/…</span></span>
+                <span class="cpu warn">38.2%</span><span class="mem">188 MB</span>
+                <button class="kill" data-anno="kill">⏻</button>
+              </div>
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">launchd</span><span class="meta">root · 9d · /sbin/launchd</span></span>
+                <span class="cpu">0.0%</span><span class="mem">12 MB</span>
+                <button class="kill" data-anno="kill-lock">🔒</button>
+              </div>
+            </div>
+          </div>
+          <!-- group 2 -->
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span class="gname">node <span class="sub">6</span></span>
+                <span class="cpu">4.1%</span><span class="mem">310 MB</span>
+              </button>
+              <button class="gtree" title="Open node process tree" data-anno="gtree">⋔</button>
+            </div>
+          </div>
+          <!-- group 3 -->
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span class="gname">cloudflared <span class="sub">2</span></span>
+                <span class="cpu">0.6%</span><span class="mem">48 MB</span>
+              </button>
+              <button class="gtree" title="Open cloudflared process tree" data-anno="gtree">⋔</button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption"><b>问题 1：</b> <code>⋔</code> 盒宽 35.6px，越过 32px 栅格槽，右侧 4px 被卡片圆角裁掉，蓝色 hover 边框看起来“断”在边缘。<br /><b>问题 2：</b> <code>⏻</code>/<code>🔒</code> 盒宽 40.4px，图标中心偏右下约 10px，按钮挤进行内边距。</p>
+    </div>
+
+    <!-- ============ AFTER: system list ============ -->
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>System · 分组列表</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">‹</button><span class="title">System</span><span class="live">Live</span></div>
+        <div class="content"><div class="page" id="after-list">
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="true">
+                <span class="caret">▾</span>
+                <span class="gname">Google Chrome <span class="sub">23</span></span>
+                <span class="cpu hot">268.4%</span><span class="mem">1.2 GB</span>
+              </button>
+              <button class="gtree" title="Open Google Chrome process tree" data-anno="gtree">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="9" y="2.5" width="6" height="5" rx="1.2"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4M5.5 16.5v-2.5h13v2.5"/>
+                </svg>
+              </button>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">Google Chrome</span><span class="meta">xhd2015 · 4h12m · /Applications/…</span></span>
+                <span class="cpu hot">112.6%</span><span class="mem">402 MB</span>
+                <button class="kill" data-anno="kill">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8.5"/><path d="M7.05 6.6a8 8 0 1 0 9.9 0"/></svg>
+                </button>
+              </div>
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">Google Chrome Helper (Renderer)</span><span class="meta">xhd2015 · 4h12m · /Applications/…</span></span>
+                <span class="cpu warn">38.2%</span><span class="mem">188 MB</span>
+                <button class="kill" data-anno="kill">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8.5"/><path d="M7.05 6.6a8 8 0 1 0 9.9 0"/></svg>
+                </button>
+              </div>
+              <div class="row">
+                <span></span>
+                <span class="who"><span class="nm">launchd</span><span class="meta">root · 9d · /sbin/launchd</span></span>
+                <span class="cpu">0.0%</span><span class="mem">12 MB</span>
+                <button class="kill" data-anno="kill-lock">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span class="gname">node <span class="sub">6</span></span>
+                <span class="cpu">4.1%</span><span class="mem">310 MB</span>
+              </button>
+              <button class="gtree" title="Open node process tree" data-anno="gtree">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="5" rx="1.2"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4M5.5 16.5v-2.5h13v2.5"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gwrap">
+              <button class="ghead" aria-expanded="false">
+                <span class="caret">▸</span>
+                <span class="gname">cloudflared <span class="sub">2</span></span>
+                <span class="cpu">0.6%</span><span class="mem">48 MB</span>
+              </button>
+              <button class="gtree" title="Open cloudflared process tree" data-anno="gtree">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="5" rx="1.2"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4M5.5 16.5v-2.5h13v2.5"/></svg>
+              </button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption"><b>统一成 28×28 的图标按钮</b>：<code>padding:0</code> + <code>inline-flex</code> 居中 + 内联 SVG（15px, <code>currentColor</code>），
+        在 32px 栅格槽里各自居中，左右各留 2px；右侧不再越界，tooltip 也不再贴视口边被截断。破坏性按钮的 hover 只换底色，不再出现蓝色描边。</p>
+    </div>
+  </div>
+
+  <!-- ============ zoom ============ -->
+  <div class="zoomrow">
+    <div class="zoom">
+      <h4>⋔ 分组树按钮 · Before（3×）</h4>
+      <p class="num">盒子 35.6px，槽 32px，溢出 <b>+3.6px</b><br />图标中心偏移 dx <b>+3.8</b> / dy <b>+3.9</b></p>
+      <div class="stage">
+        <div class="slot">
+          <span class="lbl">32px slot</span>
+          <div class="x3" style="position:absolute;left:0;top:0;width:32px;height:28px;">
+            <div class="bad-gtree" style="display:block;">⋔</div>
+          </div>
+          <div class="cross" style="width:28px;height:28px;left:14px;top:14px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="zoom ok">
+      <h4>⋔ 分组树按钮 · After（3×）</h4>
+      <p class="num">盒子 28×28，槽内居中，溢出 <b>0</b><br />图标中心偏移 dx <b>0</b> / dy <b>0</b></p>
+      <div class="stage">
+        <div class="slot">
+          <span class="lbl">32px slot</span>
+          <div class="x3" style="position:absolute;left:2px;top:0;width:28px;height:28px;">
+            <div class="gtree" style="width:28px;height:28px;display:inline-flex;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.2"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4M5.5 16.5v-2.5h13v2.5"/></svg>
+            </div>
+          </div>
+          <div class="cross" style="width:28px;height:28px;left:16px;top:14px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="zoom">
+      <h4>⏻ / 🔒 kill 按钮 · Before（3×）</h4>
+      <p class="num">盒子 40.4px，槽 32px，溢出 <b>+8.4px</b><br />图标中心偏移 dx <b>+10.0</b> / dy <b>+10.6</b></p>
+      <div class="stage">
+        <div class="slot">
+          <span class="lbl">32px slot</span>
+          <div class="x3" style="position:absolute;left:-8px;top:0;width:40px;height:28px;">
+            <div class="bad-kill" style="display:block;">🔒</div>
+          </div>
+          <div class="cross" style="width:28px;height:28px;left:14px;top:14px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="zoom ok">
+      <h4>⏻ / 🔒 kill 按钮 · After（3×）</h4>
+      <p class="num">盒子 28×28，槽内居中，溢出 <b>0</b><br />图标中心偏移 dx <b>0</b> / dy <b>0</b></p>
+      <div class="stage">
+        <div class="slot">
+          <span class="lbl">32px slot</span>
+          <div class="x3" style="position:absolute;left:2px;top:0;width:28px;height:28px;">
+            <div class="kill" style="width:28px;height:28px;display:inline-flex;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+            </div>
+          </div>
+          <div class="cross" style="width:28px;height:28px;left:16px;top:14px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="frames" style="margin-top:36px">
+    <div class="col">
+      <div class="col-h"><span class="tag bad">Before</span><h3>主页 /home</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">☰</button><span class="title">Home</span></div>
+        <div class="content">
+          <div class="strip" style="position:relative">
+            <div>
+              <div class="strip-t"><b>System</b><span class="live">live</span></div>
+              <div class="kpis">CPU <b>26%</b> · Mem <b>62%</b> · Load <b>3.1</b> · <b>501</b> procs</div>
+            </div>
+            <span class="strip-go">Processes →</span>
+          </div>
+          <div class="section-h" style="margin-top:14px"><h2>Your Projects</h2></div>
+          <div class="proj-card"><div class="proj-ic">◆</div><div><div class="proj-n">ai-critic</div><div class="proj-s">2 worktrees · master</div></div></div>
+          <div class="proj-card"><div class="proj-ic">◆</div><div><div class="proj-n">dot-pkgs</div><div class="proj-s">1 worktree · main</div></div></div>
+          <button class="home-btn primary">＋ Clone Repository</button>
+          <button class="home-btn">▤ Add From Filesystem</button>
+        </div>
+      </div>
+      <p class="caption">顶部整块 System 概览卡（含 <b>Processes →</b>）占掉首屏 86px，把项目列表往下挤；这块数据每 5s 轮询一次进程摘要。</p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">After</span><h3>主页 /home</h3></div>
+      <div class="phone">
+        <div class="topbar"><button class="back">☰</button><span class="title">Home</span></div>
+        <div class="content">
+          <div class="section-h" style="margin-top:8px"><h2>Your Projects</h2></div>
+          <div class="proj-card"><div class="proj-ic">◆</div><div><div class="proj-n">ai-critic</div><div class="proj-s">2 worktrees · master</div></div></div>
+          <div class="proj-card"><div class="proj-ic">◆</div><div><div class="proj-n">dot-pkgs</div><div class="proj-s">1 worktree · main</div></div></div>
+          <button class="home-btn primary">＋ Clone Repository</button>
+          <button class="home-btn">▤ Add From Filesystem</button>
+          <div class="drawer-note">
+            System 入口保留在侧边栏 <b>Menu → System Monitor</b>；<code>/home/system</code> 路由、分组页、PID 页都不变。
+          </div>
+          <div class="drawer-mini">
+            <div class="dm-h">MENU</div>
+            <div class="dm-i">Settings</div>
+            <div class="dm-i">Manage Server</div>
+            <div class="dm-i hl">System Monitor <em>← 唯一入口</em></div>
+            <div class="dm-i">File Transfer</div>
+            <div class="dm-i">Logs</div>
+          </div>
+        </div>
+      </div>
+      <p class="caption"><b>首屏直接是 Your Projects</b>，项目卡片上移 86px；附带好处是主页不再每 5s 拉一次 <code>/api/server/processes</code> 摘要。Manage Server 页里的 <b>Open process manager</b> 按钮也仍然可用。</p>
+    </div>
+  </div>
+
+  <!-- ============ spec ============ -->
+  <div class="spec">
+    <h3>改动清单（CSS + 图标）</h3>
+    <table>
+      <thead><tr><th style="width:240px">位置</th><th>现在</th><th>改成</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>.mcc-system-gtree</code><br /><code>.mcc-system-kill</code><br />(SystemView.css:223 / 293)</td>
+          <td class="before">width:28px; height:28px;<br />无 padding 归零 → 被全局 button 规则撑到 35.6 / 40.4px</td>
+          <td class="after">box-sizing:border-box; width:28px; height:28px;<br />padding:0; display:inline-flex;<br />align-items:center; justify-content:center;<br />line-height:1; justify-self:center</td>
+        </tr>
+        <tr>
+          <td>hover / focus 描边</td>
+          <td class="before">继承 <code>button:hover{ border-color:#646cff }</code>，蓝圈</td>
+          <td class="after">仅换 background 与 color；border-color 始终 transparent；<br />focus-visible 用 2px 蓝色 outline-offset:1px</td>
+        </tr>
+        <tr>
+          <td>图标本体</td>
+          <td class="before">字形 <code>⋔</code>、<code>⏻</code>、<code>🔒</code>（emoji 彩色，基线不可控）</td>
+          <td class="after">内联 SVG 15×15，stroke 2，<code>currentColor</code>，<code>aria-hidden</code>，按钮保留 title</td>
+        </tr>
+        <tr>
+          <td><code>.mcc-system-gwrap</code></td>
+          <td class="before">grid-template-columns:1fr 32px（1fr = minmax(auto,1fr)，长名字会挤列）</td>
+          <td class="after">minmax(0,1fr) 32px；名字列 min-width:0 + 省略号</td>
+        </tr>
+        <tr>
+          <td><code>.mcc-system-ghead</code></td>
+          <td class="before">缺 <code>min-width:0</code>：min-content 撑大 1fr 列，整行越过卡片右缘，<br />把 32px 槽里的按钮挤出卡片（长分组名时最明显）</td>
+          <td class="after">min-width:0；分组名 <code>.mcc-system-n</code> 单行省略</td>
+        </tr>
+        <tr>
+          <td><code>.mcc-ptcaret</code><br />(SystemView.css:691)</td>
+          <td class="before">16px 宽、<code>padding:0</code> 但没有居中，字形靠左</td>
+          <td class="after">同样加 inline-flex 居中；叶子节点仍不可点</td>
+        </tr>
+        <tr>
+          <td><code>.mcc-ptrow .mcc-system-kill</code><br />(SystemView.css:684)</td>
+          <td class="before">上一轮加的局部补丁 min-width:0; padding:0; font-size:13px</td>
+          <td class="after">删除（基类修好后不再需要）</td>
+        </tr>
+        <tr>
+          <td><code>HomeView.tsx:20, :94</code></td>
+          <td class="before">import + <code>&lt;SystemStrip /&gt;</code></td>
+          <td class="after">删除 import 与渲染</td>
+        </tr>
+        <tr>
+          <td><code>SystemStrip.tsx</code> + <code>.mcc-system-strip*</code></td>
+          <td class="before">整块组件与 3 条 CSS（325/341/345），仅此处引用</td>
+          <td class="after">删除文件与 CSS（<code>.mcc-system-kpis</code> 仍被 SystemSummary 用，保留）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">命中目标：按钮视觉 28×28，实际渲染同为 28×28；<code>group.scrollWidth === group.clientWidth</code>；页面 <code>scrollWidth === clientWidth === 390</code>；图标中心偏移 ≤ 0.5px；顶栏与行内按钮右边缘对齐一致（距卡片右边 12px）。</p>
+  </div>
+</div>
+</body>
+</html>

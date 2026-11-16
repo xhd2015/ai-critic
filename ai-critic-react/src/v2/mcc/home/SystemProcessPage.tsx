@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BackIcon } from '../../../pure-view/icons/BackIcon';
+import { LockBadgeIcon } from '../../../pure-view/icons/LockBadgeIcon';
+import { PowerIcon } from '../../../pure-view/icons/PowerIcon';
 import { fetchProcesses, formatBytes, formatElapsed, type HostProcess, type ProcessSnapshot } from '../../../api/processes';
 import { childrenOf, processByPid, processTitle, treeSummary } from './processTree';
 import { SystemKillModal } from './SystemKillModal';
@@ -62,7 +64,7 @@ export function SystemProcessPage() {
                 </h2>
                 {proc && (
                     <button type="button" className="mcc-system-kill" title={proc.protected || 'Kill'} onClick={() => setKillTarget(proc)}>
-                        {proc.protected ? '🔒' : '⏻'}
+                        {proc.protected ? <LockBadgeIcon /> : <PowerIcon />}
                     </button>
                 )}
             </div>
