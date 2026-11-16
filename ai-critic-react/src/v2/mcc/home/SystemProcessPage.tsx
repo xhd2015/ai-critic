@@ -185,7 +185,7 @@ export function SystemProcessPage() {
             {killTarget && (
                 <SystemKillModal
                     key={killTarget.pid}
-                    proc={killTarget}
+                    targets={[killTarget]}
                     onClose={() => setKillTarget(null)}
                     onKilled={() => {
                         setKillTarget(null);

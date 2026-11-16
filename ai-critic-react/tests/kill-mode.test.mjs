@@ -6,6 +6,7 @@ import {
     killModeSignal,
     killModeSignalText,
     killModeTitle,
+    resolveBatchKillModal,
     resolveKillModal,
 } from '../src/v2/mcc/home/killMode.ts';
 
@@ -61,4 +62,26 @@ test('tunnel warning survives both modes', () => {
     const force = resolveKillModal({ pid: 900, mode: 'force', isTunnel: true });
     assert.match(force.warning ?? '', /Cloudflare connector/);
     assert.match(force.warning ?? '', /SIGKILL/);
+});
+
+test('batch kill lists one command per pid and labels the count', () => {
+    const state = resolveBatchKillModal({ pids: [11, 22], mode: 'graceful' });
+    assert.equal(state.signal, 'TERM');
+    assert.equal(state.command, 'kill -TERM 11\nkill -TERM 22');
+    assert.equal(state.confirmLabel, 'Kill 2');
+    assert.match(state.message, /2 processes/);
+    assert.equal(state.locked, false);
+});
+
+test('batch force quit uses SIGKILL on every pid', () => {
+    const state = resolveBatchKillModal({ pids: [11, 22, 33], mode: 'force' });
+    assert.equal(state.signal, 'KILL');
+    assert.match(state.command, /kill -KILL 33/);
+    assert.equal(state.confirmLabel, 'Force Quit 3');
+});
+
+test('an empty batch cannot confirm', () => {
+    const state = resolveBatchKillModal({ pids: [], mode: 'graceful' });
+    assert.equal(state.locked, true);
+    assert.equal(state.confirmLabel, 'Cannot Kill');
 });

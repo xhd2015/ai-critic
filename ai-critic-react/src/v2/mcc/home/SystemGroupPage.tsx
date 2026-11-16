@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BackIcon } from '../../../pure-view/icons/BackIcon';
+import { CheckboxIcon } from '../../../pure-view/icons/CheckboxIcon';
 import { fetchProcesses, formatBytes, formatElapsed, type HostProcess, type ProcessSnapshot } from '../../../api/processes';
 import {
     allCollapsed,
@@ -9,6 +10,7 @@ import {
     filterForest,
     flattenVisible,
 } from './groupTree';
+import { pruneSelected, selectableRootPids } from './groupSelect';
 import { SystemPidTree } from './SystemPidTree';
 import { SystemKillModal } from './SystemKillModal';
 import './SystemView.css';
@@ -28,7 +30,9 @@ export function SystemGroupPage() {
     const [paused, setPaused] = useState(false);
     const [query, setQuery] = useState('');
     const [collapsed, setCollapsed] = useState<Set<number> | null>(null);
-    const [killTarget, setKillTarget] = useState<HostProcess | null>(null);
+    const [killTargets, setKillTargets] = useState<HostProcess[] | null>(null);
+    const [selecting, setSelecting] = useState(false);
+    const [selected, setSelected] = useState<Set<number>>(() => new Set());
     const seeded = useRef(false);
 
     useEffect(() => {
@@ -70,6 +74,12 @@ export function SystemGroupPage() {
 
     const effectiveCollapsed = collapsed ?? EMPTY_COLLAPSED;
     const rows = flattenVisible(filterForest(forest.roots, query), effectiveCollapsed);
+    const selectable = useMemo(() => selectableRootPids(rows), [rows]);
+    const selectedLive = useMemo(() => pruneSelected(selected, selectable), [selected, selectable]);
+    const selectedProcs = useMemo(
+        () => rows.filter(row => row.depth === 0 && selectedLive.has(row.node.proc.pid)).map(row => row.node.proc),
+        [rows, selectedLive],
+    );
 
     const toggle = (pid: number) => {
         setCollapsed(cur => {
@@ -142,7 +152,9 @@ export function SystemGroupPage() {
                         </div>
                     </div>
                     <div className="mcc-ptip">
-                        Kills are per-process: killing a parent leaves its children running. Tap a parent to fold its subtree; use the tree button to open the pid page.
+                        {selecting
+                            ? 'Checkboxes are roots only. Tap a root to toggle its check. Exit Select to fold again.'
+                            : 'Kills are per-process: killing a parent leaves its children running. Tap a parent to fold its subtree; use the tree button to open the pid page.'}
                     </div>
                     <div className="mcc-ptools">
                         <input
@@ -153,37 +165,78 @@ export function SystemGroupPage() {
                             onChange={e => setQuery(e.target.value)}
                         />
                         <div className="mcc-system-chips">
+                            {selecting ? (
+                                <>
+                                    <button type="button" className="mcc-system-chip" onClick={() => setSelected(new Set(selectable))}>
+                                        Select all
+                                    </button>
+                                    <button type="button" className="mcc-system-chip" onClick={() => setSelected(new Set())}>
+                                        Unselect all
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button type="button" className="mcc-system-chip" onClick={() => setCollapsed(new Set())}>
+                                        Expand all
+                                    </button>
+                                    <button type="button" className="mcc-system-chip" onClick={() => setCollapsed(allCollapsed(forest.roots))}>
+                                        Collapse all
+                                    </button>
+                                </>
+                            )}
                             <button
                                 type="button"
-                                className="mcc-system-chip"
-                                onClick={() => setCollapsed(new Set())}
+                                className={`mcc-system-chip select${selecting ? ' on' : ''}`}
+                                aria-pressed={selecting}
+                                onClick={() => {
+                                    if (selecting) {
+                                        setSelecting(false);
+                                        setSelected(new Set());
+                                    } else {
+                                        setSelecting(true);
+                                    }
+                                }}
                             >
-                                Expand all
-                            </button>
-                            <button
-                                type="button"
-                                className="mcc-system-chip"
-                                onClick={() => setCollapsed(allCollapsed(forest.roots))}
-                            >
-                                Collapse all
+                                <CheckboxIcon checked={selecting} />
+                                {selecting ? 'Selecting' : 'Select'}
                             </button>
                         </div>
+                        {selecting && selectedLive.size > 0 ? (
+                            <button
+                                type="button"
+                                className="mcc-system-killbar"
+                                onClick={() => setKillTargets(selectedProcs)}
+                            >
+                                Kill {selectedLive.size} process{selectedLive.size === 1 ? '' : 'es'}
+                            </button>
+                        ) : null}
                     </div>
                     <SystemPidTree
                         rows={rows}
                         onToggle={toggle}
                         onOpen={proc => navigate(`../../pid/${proc.pid}`, { relative: 'path' })}
-                        onKill={setKillTarget}
+                        onKill={proc => setKillTargets([proc])}
+                        selecting={selecting}
+                        selected={selectedLive}
+                        onToggleSelect={pid => {
+                            setSelected(cur => {
+                                const next = new Set(cur);
+                                if (next.has(pid)) next.delete(pid);
+                                else next.add(pid);
+                                return next;
+                            });
+                        }}
                     />
                 </>
             )}
-            {killTarget && (
+            {killTargets && killTargets.length > 0 && (
                 <SystemKillModal
-                    key={killTarget.pid}
-                    proc={killTarget}
-                    onClose={() => setKillTarget(null)}
+                    key={killTargets.map(proc => proc.pid).join(',')}
+                    targets={killTargets}
+                    onClose={() => setKillTargets(null)}
                     onKilled={() => {
-                        setKillTarget(null);
+                        setKillTargets(null);
+                        setSelected(new Set());
                         fetchProcesses().then(setData).catch(() => {});
                     }}
                 />

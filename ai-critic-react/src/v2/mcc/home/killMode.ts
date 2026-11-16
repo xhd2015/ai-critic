@@ -85,3 +85,42 @@ export function resolveKillModal({ pid, mode, protectedReason, isTunnel }: KillM
         locked: false,
     };
 }
+
+export function resolveBatchKillModal({
+    pids,
+    mode,
+    hasTunnel,
+}: {
+    pids: number[];
+    mode: KillMode;
+    hasTunnel?: boolean;
+}): KillModalState {
+    if (pids.length === 0) {
+        return {
+            signal: 'TERM',
+            command: '',
+            confirmLabel: 'Cannot Kill',
+            message: 'No processes selected.',
+            locked: true,
+        };
+    }
+    if (pids.length === 1) {
+        return resolveKillModal({ pid: pids[0], mode, isTunnel: hasTunnel });
+    }
+    const signal = killModeSignal(mode);
+    const n = pids.length;
+    const warnings = [mode === 'force' ? FORCE_WARNING : undefined, hasTunnel ? TUNNEL_WARNING : undefined].filter(
+        (value): value is string => !!value,
+    );
+    return {
+        signal,
+        command: pids.map(pid => `kill -${signal} ${pid}`).join('\n'),
+        confirmLabel: mode === 'force' ? `Force Quit ${n}` : `Kill ${n}`,
+        message:
+            mode === 'force'
+                ? `Are you sure you want to force quit ${n} processes?`
+                : `Are you sure you want to kill ${n} processes?`,
+        warning: warnings.length > 0 ? warnings.join(' ') : undefined,
+        locked: false,
+    };
+}

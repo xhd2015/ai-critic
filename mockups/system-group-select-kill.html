@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>组详情：顶栏折叠 + 顶级多选批量 Kill · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 1040px; line-height: 1.6; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 11px 13px; margin-bottom: 22px; line-height: 1.65; max-width: 1100px; }
+  .assump b { color: var(--blue); }
+  code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.good { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+  .tag.ref { color: #bfdbfe; background: rgba(96,165,250,.14); border: 1px solid rgba(96,165,250,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 0 0 8px #020617, 0 20px 50px rgba(0,0,0,.45); position: relative;
+  }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 13px 14px; background: var(--card); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+  .back { width: 28px; height: 28px; border: 0; background: none; color: var(--blue); display: grid; place-items: center; }
+  .back svg { width: 20px; height: 20px; display: block; }
+  .title { flex: 1; font-size: 15px; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 28px; }
+  .live { font-size: 10.5px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); border-radius: 999px; padding: 2px 8px; }
+  .content { flex: 1; overflow: hidden; }
+  .page { padding: 10px 0 24px; }
+
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 16px 9px; }
+  .tile { background: var(--card); border: 1px solid var(--bd); border-radius: 10px; padding: 8px 10px; }
+  .tile .k { font-size: 9.5px; color: var(--mut); letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+  .tile .v { font-size: 14px; font-weight: 700; margin-top: 2px; font-family: var(--mono); }
+  .chips { display: flex; gap: 6px; margin: 0 16px 8px; flex-wrap: nowrap; align-items: center; }
+  .chip { font-size: 10.5px; font-weight: 650; color: var(--sec); background: var(--card); border: 1px solid var(--bd); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .chip.on { color: var(--blue); border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.1); }
+  .chip.select { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+  .chip.select svg { width: 13px; height: 13px; display: block; flex: none; }
+  .killbar { margin: 0 16px 8px; }
+  .killbar .go { width: 100%; height: 36px; border: 0; border-radius: 10px; background: rgba(220,38,38,.16); color: #fecaca; border: 1px solid rgba(248,113,113,.45); font-size: 13px; font-weight: 700; }
+  .tip { font-size: 10px; color: #93c5fd; background: rgba(96,165,250,.07); border: 1px dashed rgba(96,165,250,.35); border-radius: 8px; padding: 6px 9px; margin: 0 16px 8px; line-height: 1.5; }
+  .search { margin: 0 16px 8px; background: var(--card); border: 1px solid var(--bd); border-radius: 8px; padding: 7px 10px; font-size: 12px; color: var(--mut); }
+
+  .list { padding: 0 16px; }
+  .group { background: #1e293b; border: 1px solid #334155; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+  .gwrap { display: grid; grid-template-columns: minmax(0,1fr) 32px 32px; align-items: center; }
+  .gwrap + .gwrap { border-top: 1px solid rgba(51,65,85,.45); }
+  .ghead { display: grid; grid-template-columns: 22px minmax(0,1fr) auto auto; gap: 8px; align-items: center; width: 100%; padding: 10px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; min-width: 0; }
+  .ghead.leaf { cursor: default; }
+  .sel .ghead { grid-template-columns: 22px 22px minmax(0,1fr) auto auto; }
+  .who { min-width: 0; }
+  .n { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cpu, .mem { font-family: var(--mono); font-size: 12px; font-weight: 700; text-align: right; }
+  .cpu.hot { color: var(--red); } .cpu.warn { color: var(--yellow); }
+  .mem { color: #94a3b8; min-width: 52px; }
+  .icon { width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; padding: 0; justify-self: center; }
+  .icon svg { width: 15px; height: 15px; display: block; }
+  .gtree { color: var(--blue); border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); }
+  .box { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid #64748b; display: grid; place-items: center; justify-self: center; }
+  .box.on { background: var(--blue); border-color: var(--blue); color: #0f172a; font-size: 12px; font-weight: 800; }
+  .box.off { background: transparent; }
+  .picked { background: rgba(96,165,250,.08); }
+  .caret { color: #94a3b8; font-size: 12px; }
+  .leafdot { color: #475569; }
+
+  .tmap { display: flex; height: 28px; border-radius: 7px; overflow: hidden; margin: 12px 16px 0; border: 1px solid #1e293b; font-size: 9px; font-weight: 700; }
+  .tmap div { display: grid; place-items: center; flex: 0 0 auto; }
+  .g-fold { background: rgba(251,191,36,.22); color: #fde68a; flex: 1 !important; }
+  .g-kill { background: rgba(148,163,184,.2); color: #e2e8f0; width: 36px; }
+  .g-open { background: rgba(96,165,250,.24); color: #bfdbfe; width: 36px; }
+  .g-dead { background: repeating-linear-gradient(45deg, rgba(248,113,113,.22) 0 4px, rgba(248,113,113,.1) 4px 8px); color: #fecaca; flex: 1 !important; }
+
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+  .caption .bad { color: #fca5a5; } .caption .good { color: #86efac; }
+
+  .scrim { position: absolute; inset: 0; background: rgba(2,6,23,.72); display: flex; align-items: flex-end; }
+  .sheet { width: 100%; background: #1e293b; border-top: 1px solid #334155; border-radius: 18px 18px 0 0; padding: 16px 16px 28px; }
+  .sheet h4 { margin: 0 0 6px; font-size: 16px; }
+  .sheet p { margin: 0 0 12px; font-size: 12px; color: #94a3b8; line-height: 1.5; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .mode { border: 1px solid #334155; background: #0f172a; border-radius: 10px; padding: 10px; color: inherit; text-align: left; }
+  .mode.on { border-color: #60a5fa; background: rgba(96,165,250,.1); }
+  .mode.force.on { border-color: #f87171; background: rgba(248,113,113,.1); }
+  .mode .t { display: block; font-size: 13px; font-weight: 650; }
+  .mode .u { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .cmd { font-family: var(--mono); font-size: 11px; color: #cbd5e1; background: #0f172a; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btn { border: 0; border-radius: 10px; padding: 10px; font-weight: 650; font-size: 13px; }
+  .btn.cancel { background: #334155; color: #e2e8f0; }
+  .btn.kill { background: #dc2626; color: white; }
+
+  .spec { margin-top: 40px; max-width: 1180px; }
+  .spec h2 { font-size: 16px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--mut); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+  .note { font-size: 12px; color: #cbd5e1; line-height: 1.7; background: #0b1220; border: 1px solid #1e293b; border-radius: 10px; padding: 12px 14px; margin-top: 18px; }
+  .note b { color: var(--blue); }
+  ul { margin: 6px 0 0; padding-left: 18px; }
+  li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>组详情：点 bar 只折叠；Select 只勾顶级；批量 Kill 仍分 Graceful / Force</h1>
+  <p class="lead">
+    页面 <code>/home/system/group/Google Chrome</code>。两件事：
+    （1）点顶级卡片的主体必须是收起/展开，进 pid 页只走右边树标——和 <code>/home/system</code> 组条同一套。
+    （2）加 Select 模式，<b>只勾 depth=0 的 root</b>，Select all / Unselect all，再批量 Kill，弹窗仍是 Graceful / Force。
+  </p>
+  <div class="assump">
+    <b>结论：</b>浏览态 bar = <code>ghead</code> 折叠，<code>gtree</code> 进 pid 页，kill 在树标左边。
+    点 Select 后，每个 root 卡片左边多一个勾选框；点卡片主体改成勾选，不再折叠（折叠仍可用 Expand/Collapse all）。
+    子进程没有勾选框。Kill N 打开现有 kill 弹窗的批量版，对每个未保护 pid 循环调用现有 <code>POST /api/server/processes/kill</code>。
+  </div>
+
+  <div class="frames">
+    <div class="col">
+      <div class="col-h"><span class="tag ref">Browse</span><h3>点 bar = 折叠</h3></div>
+      <div class="phone">
+        <div class="topbar">
+          <button class="back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="title">Google Chrome</div>
+          <span class="live">2s</span>
+          <span class="chip">Pause</span>
+        </div>
+        <div class="content"><div class="page">
+          <div class="tiles">
+            <div class="tile"><div class="k">Processes</div><div class="v">284</div></div>
+            <div class="tile"><div class="k">Group CPU</div><div class="v">170%</div></div>
+          </div>
+          <div class="search">Filter 284 procs…</div>
+          <div class="chips">
+            <span class="chip">Expand all</span>
+            <span class="chip">Collapse all</span>
+            <span class="chip select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>Select</span>
+          </div>
+          <div class="tip">Tap a parent to fold. The tree button opens the pid page. Select only checks top-level roots.</div>
+          <div class="list">
+            <div class="group">
+              <div class="gwrap">
+                <button class="ghead">
+                  <span class="caret">▾</span>
+                  <div class="who"><div class="n">Google Chrome · 80960</div><div class="s">xhd2015 · 2d1h · S</div></div>
+                  <span class="cpu hot">42.1%</span><span class="mem">1.2 GB</span>
+                </button>
+                <button class="icon" title="Kill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree" title="Open pid page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+              <div class="gwrap">
+                <div class="ghead leaf" style="padding-left:24px">
+                  <span class="leafdot">•</span>
+                  <div class="who"><div class="n">Google Chrome Helper · 80988</div><div class="s">xhd2015 · 2d1h · S</div></div>
+                  <span class="cpu">1.2%</span><span class="mem">88 MB</span>
+                </div>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+            <div class="group">
+              <div class="gwrap">
+                <button class="ghead">
+                  <span class="caret">▸</span>
+                  <div class="who"><div class="n">Google Chrome · 81201</div><div class="s">xhd2015 · 4h · S</div></div>
+                  <span class="cpu warn">18.0%</span><span class="mem">640 MB</span>
+                </button>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tmap">
+        <div class="g-fold">主体 折叠/展开</div>
+        <div class="g-kill">⏻</div>
+        <div class="g-open">⋔ 进 pid</div>
+      </div>
+      <p class="caption">
+        <b>浏览态</b>：点 bar 主体只折叠。进「主页」（pid 页）只点右边树标。
+        源码里 <code>ghead → onToggle</code> 已经是这样；线上若仍一进 pid 页，是旧包或点到了树标。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">Select</span><h3>只勾顶级 root</h3></div>
+      <div class="phone">
+        <div class="topbar">
+          <button class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="title">Google Chrome</div>
+          <span class="live">2s</span>
+          <span class="chip">Pause</span>
+        </div>
+        <div class="content"><div class="page">
+          <div class="search">Filter 284 procs…</div>
+          <div class="chips">
+            <span class="chip">Select all</span>
+            <span class="chip">Unselect all</span>
+            <span class="chip select on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>Selecting</span>
+          </div>
+          <div class="killbar"><button class="go">Kill 2 processes</button></div>
+          <div class="tip">Checkboxes are roots only. Children cannot be selected. Tap a root to toggle its check. Exit Select to fold again.</div>
+          <div class="list sel">
+            <div class="group">
+              <div class="gwrap picked">
+                <button class="ghead">
+                  <span class="box on">✓</span>
+                  <span class="caret">▾</span>
+                  <div class="who"><div class="n">Google Chrome · 80960</div><div class="s">xhd2015 · 2d1h · S</div></div>
+                  <span class="cpu hot">42.1%</span><span class="mem">1.2 GB</span>
+                </button>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+              <div class="gwrap">
+                <div class="ghead leaf" style="padding-left:24px">
+                  <span class="leafdot">•</span>
+                  <div class="who"><div class="n">Google Chrome Helper · 80988</div><div class="s">no checkbox — not a root</div></div>
+                  <span class="cpu">1.2%</span><span class="mem">88 MB</span>
+                </div>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+            <div class="group">
+              <div class="gwrap picked">
+                <button class="ghead">
+                  <span class="box on">✓</span>
+                  <span class="caret">▸</span>
+                  <div class="who"><div class="n">Google Chrome · 81201</div><div class="s">xhd2015 · 4h · S</div></div>
+                  <span class="cpu warn">18.0%</span><span class="mem">640 MB</span>
+                </button>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+            <div class="group">
+              <div class="gwrap">
+                <button class="ghead">
+                  <span class="box off"></span>
+                  <span class="caret">▸</span>
+                  <div class="who"><div class="n">Google Chrome · 82004</div><div class="s">not selected</div></div>
+                  <span class="cpu">0.4%</span><span class="mem">96 MB</span>
+                </button>
+                <button class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77 0"/></svg></button>
+                <button class="icon gtree"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5"/><path d="M5 17v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <p class="caption">
+        <span class="good">一行工具条</span>：左边 Select all / Unselect all，右边 Selecting。Kill 单独一条通栏。
+        进入 Select 后 Expand/Collapse 让位给这两项；退出后回来。Helper 没有勾选框。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><span class="tag good">Kill</span><h3>批量仍选 Graceful / Force</h3></div>
+      <div class="phone">
+        <div class="topbar">
+          <button class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="title">Google Chrome</div>
+          <span class="live">2s</span>
+        </div>
+        <div class="content"><div class="page">
+          <div class="chips">
+            <span class="chip">Select all</span>
+            <span class="chip">Unselect all</span>
+            <span class="chip select on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>Selecting</span>
+          </div>
+          <div class="killbar"><button class="go">Kill 2 processes</button></div>
+          <div class="list sel">
+            <div class="group"><div class="gwrap picked"><button class="ghead"><span class="box on">✓</span><span class="caret">▸</span><div class="who"><div class="n">Google Chrome · 80960</div></div><span class="cpu hot">42.1%</span><span class="mem">1.2 GB</span></button></div></div>
+            <div class="group"><div class="gwrap picked"><button class="ghead"><span class="box on">✓</span><span class="caret">▸</span><div class="who"><div class="n">Google Chrome · 81201</div></div><span class="cpu warn">18.0%</span><span class="mem">640 MB</span></button></div></div>
+          </div>
+        </div></div>
+        <div class="scrim">
+          <div class="sheet">
+            <h4>Kill 2 processes</h4>
+            <p>Kills are per-process: children of a selected root are not killed unless they are also selected roots. Protected pids are skipped.</p>
+            <div class="modes">
+              <button class="mode on"><span class="t">Graceful</span><span class="u">SIGTERM · 15</span></button>
+              <button class="mode force"><span class="t">Force Quit</span><span class="u">SIGKILL · 9</span></button>
+            </div>
+            <div class="cmd">kill -TERM 80960<br>kill -TERM 81201</div>
+            <div class="acts">
+              <button class="btn cancel">Cancel</button>
+              <button class="btn kill">Kill 2</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        复用现有 <code>SystemKillModal</code> 的模式切换，标题/命令改成 N 个 pid。
+        客户端按顺序调现有单 pid kill，不新开批量 API。失败的 pid 留在选择里并报错。
+      </p>
+    </div>
+  </div>
+
+  <div class="spec">
+    <h2>规格</h2>
+    <table>
+      <thead><tr><th>项目</th><th>现在</th><th>改后</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>点顶级 bar</td>
+          <td>源码：<code>ghead → onToggle</code>。线上若仍进 pid 页，是点到了 <code>gtree</code> 或跑着旧包</td>
+          <td>锁定：主体只折叠。树标才进 <code>/home/system/pid/:pid</code>。Select 模式下主体改成勾选</td>
+        </tr>
+        <tr>
+          <td>Select 入口</td>
+          <td>无</td>
+          <td>一行、不换行：浏览 = Expand all / Collapse all + 右端 ☐ Select。选中 = Select all / Unselect all + 右端 ☑ Selecting。Kill 是下面一条通栏按钮，不是芯片</td>
+        </tr>
+        <tr>
+          <td>勾选范围</td>
+          <td>—</td>
+          <td>仅 <code>depth === 0</code> 且未 <code>protected</code> 的 root。子行永不出现 checkbox。Select all 只覆盖当前过滤可见的这些 root</td>
+        </tr>
+        <tr>
+          <td>Select 时点 bar</td>
+          <td>—</td>
+          <td>切换该 root 的勾选，不折叠、不导航。进入 Select 后 Expand/Collapse 让位给 Select all / Unselect all；要折叠先退出 Select</td>
+        </tr>
+        <tr>
+          <td>批量 Kill</td>
+          <td>只能一行一个 kill 弹窗</td>
+          <td><code>Kill N</code> 打开同一套 Graceful / Force。对每个选中 pid 调 <code>killHostProcess(pid, signal)</code>。不新开服务端批量接口</td>
+        </tr>
+        <tr>
+          <td>状态</td>
+          <td>—</td>
+          <td>全是 React state：<code>selecting</code> boolean + <code>selected: Set&lt;pid&gt;</code>。退出 Select / 过滤变化时丢掉已不可见的 pid。不落盘</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>不建议：</b>
+      <ul>
+        <li>Select 勾到子进程：用户明确只要顶级列表。</li>
+        <li>新开 <code>/kill-batch</code> API：现有单 pid 接口够用，失败可以逐个报告。</li>
+        <li>Select 时把树标也藏起来：进 pid 页和单杀仍要可用。</li>
+        <li>点 bar 进 pid 页：和 <code>/home/system</code> 组条语言冲突，也是这次要修的错。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

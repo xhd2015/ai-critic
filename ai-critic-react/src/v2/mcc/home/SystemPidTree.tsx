@@ -8,20 +8,26 @@ import { processTitle } from './processTree';
 /**
  * Group-detail forest, rendered with the same cards as /home/system.
  *
- * Each depth-0 root is a `.mcc-system-group`. A branch uses `.mcc-system-ghead`
- * to fold; a leaf body is a div. Kill sits left of `.mcc-system-gtree`, which
- * opens the pid page — same trailing "open" slot as the home group bar.
+ * Browse: ghead folds, gtree opens the pid page, kill sits left of gtree.
+ * Select: depth-0 unprotected roots grow a checkbox; tapping the body toggles
+ * the check instead of folding.
  */
 export function SystemPidTree({
     rows,
     onToggle,
     onOpen,
     onKill,
+    selecting = false,
+    selected,
+    onToggleSelect,
 }: {
     rows: VisibleRow[];
     onToggle: (pid: number) => void;
     onOpen: (proc: HostProcess) => void;
     onKill: (proc: HostProcess) => void;
+    selecting?: boolean;
+    selected?: ReadonlySet<number>;
+    onToggleSelect?: (pid: number) => void;
 }) {
     if (rows.length === 0) {
         return <div className="mcc-system-empty">No processes in this group match the filter.</div>;
@@ -37,6 +43,9 @@ export function SystemPidTree({
                             onToggle={onToggle}
                             onOpen={onOpen}
                             onKill={onKill}
+                            selecting={selecting}
+                            selected={selected}
+                            onToggleSelect={onToggleSelect}
                         />
                     ))}
                 </div>
@@ -50,11 +59,17 @@ function PidTreeRow({
     onToggle,
     onOpen,
     onKill,
+    selecting,
+    selected,
+    onToggleSelect,
 }: {
     row: VisibleRow;
     onToggle: (pid: number) => void;
     onOpen: (proc: HostProcess) => void;
     onKill: (proc: HostProcess) => void;
+    selecting: boolean;
+    selected?: ReadonlySet<number>;
+    onToggleSelect?: (pid: number) => void;
 }) {
     const { node, depth, hasChildren, expanded } = row;
     const proc = node.proc;
@@ -63,8 +78,11 @@ function PidTreeRow({
     const title = processTitle(proc);
     const openLabel = `Open ${title} · ${proc.pid}`;
     const pad = depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined;
+    const selectable = selecting && depth === 0 && !proc.protected;
+    const checked = selectable && !!selected?.has(proc.pid);
     const who = (
         <>
+            {selectable ? <span className={`mcc-system-check${checked ? ' on' : ''}`}>{checked ? '✓' : ''}</span> : null}
             <span>{hasChildren ? (expanded ? '▾' : '▸') : '•'}</span>
             <div className="mcc-system-who">
                 <div className="mcc-system-n">
@@ -82,16 +100,21 @@ function PidTreeRow({
             <span className="mcc-system-mem">{formatBytes(proc.rss_bytes)}</span>
         </>
     );
+    const headClass = `mcc-system-ghead${selectable ? ' picking' : hasChildren ? '' : ' leaf'}`;
     return (
-        <div className="mcc-system-gwrap with-kill">
-            {hasChildren ? (
+        <div className={`mcc-system-gwrap with-kill${checked ? ' picked' : ''}`}>
+            {selectable || hasChildren ? (
                 <button
                     type="button"
-                    className="mcc-system-ghead"
+                    className={headClass}
                     style={pad}
-                    aria-expanded={expanded}
-                    aria-label={expanded ? 'Collapse subtree' : 'Expand subtree'}
-                    onClick={() => onToggle(proc.pid)}
+                    aria-expanded={hasChildren && !selectable ? expanded : undefined}
+                    aria-pressed={selectable ? checked : undefined}
+                    aria-label={selectable ? (checked ? 'Unselect process' : 'Select process') : (expanded ? 'Collapse subtree' : 'Expand subtree')}
+                    onClick={() => {
+                        if (selectable) onToggleSelect?.(proc.pid);
+                        else onToggle(proc.pid);
+                    }}
                 >
                     {who}
                 </button>

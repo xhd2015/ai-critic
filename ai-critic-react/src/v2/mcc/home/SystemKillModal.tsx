@@ -1,42 +1,62 @@
 import { useState } from 'react';
 import { ConfirmModal } from '../ConfirmModal';
 import { formatBytes, killHostProcess, type HostProcess } from '../../../api/processes';
-import { KILL_MODES, killModeSignalText, killModeTitle, resolveKillModal, type KillMode } from './killMode';
+import { KILL_MODES, killModeSignalText, killModeTitle, resolveBatchKillModal, resolveKillModal, type KillMode } from './killMode';
 
 export function SystemKillModal({
-    proc,
+    targets,
     onClose,
     onKilled,
 }: {
-    proc: HostProcess;
+    targets: HostProcess[];
     onClose: () => void;
     onKilled: () => void;
 }) {
     const [mode, setMode] = useState<KillMode>('graceful');
-    const state = resolveKillModal({
-        pid: proc.pid,
-        mode,
-        protectedReason: proc.protected,
-        isTunnel: (proc.tags ?? []).includes('tun'),
-    });
+    const live = targets.filter(proc => !proc.protected);
+    const hasTunnel = live.some(proc => (proc.tags ?? []).includes('tun'));
+    const one = targets.length === 1 ? targets[0] : null;
+    const state = one
+        ? resolveKillModal({
+            pid: one.pid,
+            mode,
+            protectedReason: one.protected,
+            isTunnel: hasTunnel,
+        })
+        : resolveBatchKillModal({ pids: live.map(proc => proc.pid), mode, hasTunnel });
+
+    const info: Record<string, string> = one
+        ? {
+            Name: one.name,
+            PID: String(one.pid),
+            User: one.user,
+            'CPU / RSS': `${one.cpu_percent.toFixed(1)}% · ${formatBytes(one.rss_bytes)}`,
+        }
+        : {
+            Processes: String(live.length),
+            PIDs: live.slice(0, 8).map(proc => String(proc.pid)).join(', ') + (live.length > 8 ? '…' : ''),
+        };
 
     return (
         <ConfirmModal
-            title="Kill Process"
+            title={live.length > 1 ? `Kill ${live.length} processes` : 'Kill Process'}
             message={state.message}
             warning={state.warning}
-            info={{
-                Name: proc.name,
-                PID: String(proc.pid),
-                User: proc.user,
-                'CPU / RSS': `${proc.cpu_percent.toFixed(1)}% · ${formatBytes(proc.rss_bytes)}`,
-            }}
+            info={info}
             command={state.command}
             confirmLabel={state.confirmLabel}
             confirmVariant={state.locked ? 'default' : 'danger'}
             onConfirm={async () => {
                 if (state.locked) return;
-                await killHostProcess(proc.pid, state.signal);
+                const failed: string[] = [];
+                for (const proc of live) {
+                    try {
+                        await killHostProcess(proc.pid, state.signal);
+                    } catch (err) {
+                        failed.push(`${proc.pid}: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                }
+                if (failed.length > 0) throw new Error(failed.join('\n'));
                 onKilled();
             }}
             onClose={onClose}
