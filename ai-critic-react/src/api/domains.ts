@@ -32,6 +32,49 @@ export interface CloudflareStatus {
     auth_error?: string;
 }
 
+// Tunnel edge transports understood by cloudflared --protocol.
+export const TunnelProtocols = {
+    HTTP2: 'http2',
+    QUIC: 'quic',
+} as const;
+
+export type TunnelProtocol = typeof TunnelProtocols[keyof typeof TunnelProtocols];
+
+export interface TunnelProtocolInfo {
+    /** Persisted value; '' means "not configured". */
+    protocol: string;
+    /** What cloudflared is actually launched with. */
+    effective: string;
+    /** The built-in fallback. */
+    default: string;
+}
+
+export interface TunnelProtocolSaveResult extends TunnelProtocolInfo {
+    restarted: boolean;
+}
+
+export async function fetchTunnelProtocol(): Promise<TunnelProtocolInfo> {
+    const resp = await fetch('/api/domains/tunnel-protocol');
+    if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to fetch edge protocol');
+    }
+    return resp.json();
+}
+
+export async function saveTunnelProtocol(protocol: string, restart = true): Promise<TunnelProtocolSaveResult> {
+    const resp = await fetch('/api/domains/tunnel-protocol', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ protocol, no_restart: !restart }),
+    });
+    if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save edge protocol');
+    }
+    return resp.json();
+}
+
 export async function fetchDomains(): Promise<DomainsWithStatusResponse> {
     const resp = await fetch('/api/domains');
     if (!resp.ok) {

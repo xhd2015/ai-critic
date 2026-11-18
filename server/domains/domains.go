@@ -126,6 +126,9 @@ type DomainWithStatus struct {
 type DomainsConfig struct {
 	Domains    []DomainEntry `json:"domains"`
 	TunnelName string        `json:"tunnel_name,omitempty"` // Cloudflare tunnel name, persisted
+	// Protocol is the cloudflared edge transport ("http2" or "quic").
+	// Empty means "not configured" and resolves to the pinned default (http2).
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // DomainsWithStatusResponse includes status for each domain
@@ -169,6 +172,9 @@ func AutoStartTunnels() {
 	if port == 0 {
 		return
 	}
+	// The edge transport must be in place before the first connector spawns,
+	// otherwise a QUIC host would boot on HTTP/2 and only switch after a restart.
+	ApplyConfiguredProtocol()
 	bootstrapDomains.startConfigured(port)
 }
 
@@ -179,6 +185,7 @@ func RegisterAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/domains/tunnel/start", handleTunnelStart)
 	mux.HandleFunc("/api/domains/tunnel/stop", handleTunnelStop)
 	mux.HandleFunc("/api/domains/tunnel-name", handleTunnelName)
+	mux.HandleFunc("/api/domains/tunnel-protocol", handleTunnelProtocol)
 	mux.HandleFunc("/api/domains/random-subdomain", handleRandomSubdomain)
 	mux.HandleFunc("/api/domains/health-logs", handleHealthCheckLogs)
 }
@@ -241,7 +248,7 @@ func handleSaveDomains(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	cfg := DomainsConfig{Domains: request.Domains, TunnelName: current.TunnelName}
+	cfg := DomainsConfig{Domains: request.Domains, TunnelName: current.TunnelName, Protocol: current.Protocol}
 	if request.TunnelName != nil {
 		cfg.TunnelName = *request.TunnelName
 	}

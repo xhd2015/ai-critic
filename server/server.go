@@ -55,6 +55,7 @@ import (
 	"github.com/xhd2015/ai-critic/server/github"
 	servergomod "github.com/xhd2015/ai-critic/server/gomod"
 	serverhostmon "github.com/xhd2015/ai-critic/server/hostmon"
+	serverhostsvc "github.com/xhd2015/ai-critic/server/hostservices"
 	"github.com/xhd2015/ai-critic/server/keepalive"
 	"github.com/xhd2015/ai-critic/server/localadhoc"
 	"github.com/xhd2015/ai-critic/server/localclipboard"
@@ -670,6 +671,9 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// Host CPU/disk sampler. Off unless the operator enabled it.
 	serverhostmon.RegisterAPI(mux)
 	go serverhostmon.Boot()
+
+	// Host systemd units: who really owns a boot-enabled service.
+	serverhostsvc.RegisterAPI(mux)
 
 	// Domains API
 	domains.RegisterAPI(mux)

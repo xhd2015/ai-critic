@@ -535,7 +535,7 @@ func (utm *UnifiedTunnelManager) buildConfig() *CloudflaredConfig {
 	return &CloudflaredConfig{
 		Tunnel:          tunnelID,
 		CredentialsFile: credFile,
-		Protocol:        DefaultTunnelProtocol,
+		Protocol:        ConfiguredProtocol(),
 		Ingress:         rules,
 	}
 }
@@ -635,11 +635,13 @@ func (utm *UnifiedTunnelManager) startProcessLocked() error {
 		fmt.Printf("[unified-tunnel] startProcessLocked: killed stale connector PIDs: %v\n", killed)
 	}
 
-	// Start cloudflared. Pin HTTP/2: QUIC is blocked on many networks and
-	// health-check SIGTERM resets cloudflared's QUIC→HTTP/2 fallback.
-	args := CloudflaredRunArgs(cfgPath, tunnelRef, DefaultTunnelProtocol)
+	// Start cloudflared. The edge transport is configurable per install:
+	// HTTP/2 stays the default because QUIC needs UDP/7844, which some
+	// networks drop; a host on a lossy uplink can switch this to QUIC.
+	protocol := ConfiguredProtocol()
+	args := CloudflaredRunArgs(cfgPath, tunnelRef, protocol)
 	cmd := exec.Command("cloudflared", args...)
-	cmd.Env = withTunnelProtocolEnv(os.Environ(), DefaultTunnelProtocol)
+	cmd.Env = withTunnelProtocolEnv(os.Environ(), protocol)
 	fmt.Printf("[unified-tunnel] startProcessLocked: executing: cloudflared %s\n", strings.Join(args, " "))
 
 	if logFile != nil {
@@ -871,6 +873,16 @@ func (utm *UnifiedTunnelManager) Stop() {
 	defer utm.mu.Unlock()
 	utm.cancelRebuildDebounceLocked()
 	utm.stopProcessLocked()
+}
+
+// RestartNow forces one rebuild + restart regardless of whether config.yml
+// changed. Callers use it after mutating process-wide settings (such as the
+// edge protocol) that the YAML byte comparison cannot detect on its own.
+func (utm *UnifiedTunnelManager) RestartNow() error {
+	utm.mu.Lock()
+	defer utm.mu.Unlock()
+	utm.cancelRebuildDebounceLocked()
+	return utm.rebuildAndRestartLockedWithForce(true)
 }
 
 // IsRunning returns whether the tunnel process is currently running

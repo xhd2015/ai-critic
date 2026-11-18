@@ -17,8 +17,10 @@ Origin cloudflared backend. Exactly one of native, qemu, proxy.
 Commands:
   status                 Show configured backend and what is actually serving
   use native|qemu|proxy  Switch backend, republish, then stop the previous one
+  protocol [http2|quic]  Get or set the tunnel edge transport
 
 Run '%s cloudflared use -h' for backends.
+Run '%s cloudflared protocol -h' for the edge transport.
 `
 
 const cloudflaredUseHelp = `Usage: %s cloudflared use native|qemu|proxy
@@ -31,7 +33,7 @@ const cloudflaredUseHelp = `Usage: %s cloudflared use native|qemu|proxy
 
 func runCloudflared(resolve func() (*client.Client, error), args []string) error {
 	if len(args) == 0 || isHelpToken(args[0]) {
-		fmt.Fprintf(osStdout(), cloudflaredHelp, active.Name, active.Name)
+		fmt.Fprintf(osStdout(), cloudflaredHelp, active.Name, active.Name, active.Name)
 		return nil
 	}
 	switch args[0] {
@@ -39,6 +41,8 @@ func runCloudflared(resolve func() (*client.Client, error), args []string) error
 		return runCloudflaredStatus(resolve, args[1:])
 	case "use":
 		return runCloudflaredUse(resolve, args[1:])
+	case "protocol":
+		return runCloudflaredProtocol(resolve, args[1:])
 	default:
 		return fmt.Errorf("unknown cloudflared command %q", args[0])
 	}

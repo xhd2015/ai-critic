@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { fetchDomains, saveDomains, fetchCloudflareStatus, startTunnel, stopTunnel, fetchTunnelName, saveTunnelName } from '../../../../api/domains';
-import type { DomainEntry, DomainWithStatus, CloudflareStatus } from '../../../../api/domains';
+import { fetchDomains, saveDomains, fetchCloudflareStatus, startTunnel, stopTunnel, fetchTunnelName, saveTunnelName, fetchTunnelProtocol, saveTunnelProtocol } from '../../../../api/domains';
+import type { DomainEntry, DomainWithStatus, CloudflareStatus, TunnelProtocolInfo } from '../../../../api/domains';
 import { consumeSSEStream } from '../../../../api/sse';
 import type { LogLine } from '../../../LogViewer';
 import { DomainRowView } from './DomainRowView';
@@ -9,6 +9,7 @@ import { AddDomainForm } from './AddDomainForm';
 import { Loading } from '../../../../pure-view/Loading';
 import { Section } from '../../../../pure-view/Section';
 import { InlineError } from '../../../../pure-view/InlineError';
+import { EdgeProtocolField } from './EdgeProtocolField';
 import './WebAccessSection.css';
 
 export function WebAccessSection() {
@@ -23,6 +24,10 @@ export function WebAccessSection() {
     // Persisted tunnel name
     const [tunnelName, setTunnelName] = useState('');
 
+    // Edge transport (http2 default, quic optional)
+    const [protocolInfo, setProtocolInfo] = useState<TunnelProtocolInfo | null>(null);
+    const [savingProtocol, setSavingProtocol] = useState(false);
+
     // Per-domain tunnel start streaming state
     const [startingDomain, setStartingDomain] = useState<string | null>(null);
     const [startLogs, setStartLogs] = useState<LogLine[]>([]);
@@ -35,10 +40,11 @@ export function WebAccessSection() {
     const loadData = () => {
         setLoading(true);
         setError(null);
-        Promise.all([fetchDomains(), fetchTunnelName()])
-            .then(([domainsResp, tn]) => {
+        Promise.all([fetchDomains(), fetchTunnelName(), fetchTunnelProtocol().catch(() => null)])
+            .then(([domainsResp, tn, protocol]) => {
                 setDomainsList(domainsResp.domains ?? []);
                 setTunnelName(tn);
+                setProtocolInfo(protocol);
                 setLoading(false);
             })
             .catch(err => { setError(err.message); setLoading(false); });
@@ -91,6 +97,18 @@ export function WebAccessSection() {
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         }
+    };
+
+    const handleSaveProtocol = async (protocol: string, restart: boolean) => {
+        setError(null);
+        setSavingProtocol(true);
+        try {
+            const res = await saveTunnelProtocol(protocol, restart);
+            setProtocolInfo({ protocol: res.protocol, effective: res.effective, default: res.default });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        }
+        setSavingProtocol(false);
     };
 
     const handleAddDomain = async (entry: DomainEntry) => {
@@ -192,6 +210,13 @@ export function WebAccessSection() {
                             )}
                         </div>
                     )}
+
+                    <EdgeProtocolField
+                        info={protocolInfo}
+                        saving={savingProtocol}
+                        onSave={handleSaveProtocol}
+                        onError={setError}
+                    />
 
                     {error && <InlineError>{error}</InlineError>}
 

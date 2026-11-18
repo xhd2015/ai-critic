@@ -16,6 +16,9 @@ Subcommands:
   list [--all]
       List all managed services. --all is accepted as a no-op alias.
 
+  host <list|disable> [...]
+      Boot-enabled systemd units and who really owns them.
+
   add --name NAME --command COMMAND [options...]
       Create a new service definition (optionally start or disable it).
 
@@ -195,6 +198,8 @@ func runService(resolve func() (*client.Client, error), args []string) error {
 		return runServiceUpgrade(resolve, args[1:])
 	case "logs":
 		return runServiceLogs(resolve, args[1:])
+	case "host":
+		return runServiceHost(resolve, args[1:])
 	case "-h", "--help":
 		fmt.Print(serviceHelp)
 		return nil

@@ -1,0 +1,119 @@
+/* Host services (systemd ownership) */
+
+.host-services {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.host-services-summary {
+    font-size: 12.5px;
+    color: #94a3b8;
+}
+
+.host-services-summary b {
+    color: #e2e8f0;
+}
+
+.host-services-notice {
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    color: #34d399;
+}
+
+.host-services-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.host-services-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+
+.host-services-row.host-services-owner-unused {
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+.host-services-row.host-services-owner-both {
+    border-color: rgba(96, 165, 250, 0.35);
+}
+
+.host-services-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.host-services-unit {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+    color: #e2e8f0;
+}
+
+.host-services-meta {
+    font-size: 11.5px;
+    color: #94a3b8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.host-services-badges {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.host-services-badge {
+    font-size: 10.5px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(139, 147, 167, 0.15);
+    color: #94a3b8;
+}
+
+.host-services-badge.host-services-active-active {
+    background: rgba(52, 211, 153, 0.12);
+    color: #34d399;
+}
+
+.host-services-badge.host-services-active-inactive,
+.host-services-badge.host-services-active-failed {
+    background: rgba(139, 147, 167, 0.15);
+    color: #94a3b8;
+}
+
+.host-services-badge.host-services-owner-badge-unused {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+}
+
+.host-services-badge.host-services-owner-badge-both {
+    background: rgba(96, 165, 250, 0.12);
+    color: #60a5fa;
+}
+
+.host-services-action {
+    flex-shrink: 0;
+}
+
+.host-services-protected {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}

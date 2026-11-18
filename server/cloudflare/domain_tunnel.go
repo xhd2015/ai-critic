@@ -328,6 +328,7 @@ func startDomainTunnel(domain string, port int, tunnelName string, logFn LogFunc
 		Tunnel:   tunnelName,
 		Hostname: domain,
 		Origin:   origin,
+		Protocol: unified_tunnel.ConfiguredProtocol(),
 	})
 	if err != nil {
 		return nil, err

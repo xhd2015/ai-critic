@@ -16,6 +16,8 @@ import (
 	"time"
 
 	pkgcf "github.com/xhd2015/dot-pkgs/go-pkgs/cloudflare"
+
+	"github.com/xhd2015/ai-critic/server/cloudflare/unified_tunnel"
 )
 
 // The connector watchdog probes each managed host tunnel's public URL and
@@ -91,7 +93,11 @@ var (
 // attachManagedTunnel re-runs the host attach flow for one host. Attach loads
 // the full tunnel state, rewrites config.yml from every host, and starts a
 // fresh connector when the recorded PID is dead — the same path
-// backend/host.go uses, so the new connector carries the pinned protocol.
+// backend/host.go uses, so the new connector carries the configured protocol.
+//
+// Protocol comes from the operator's setting, so a boot-time or watchdog attach
+// both reconciles state.json with it — a host that switched to quic must not
+// silently come back on http2 after a recycle.
 func attachManagedTunnel(st *pkgcf.TunnelState, configDir, host, service string) error {
 	_, err := pkgcf.Attach(pkgcf.AttachOptions{
 		Domain:     host,
@@ -99,6 +105,7 @@ func attachManagedTunnel(st *pkgcf.TunnelState, configDir, host, service string)
 		TunnelName: st.TunnelName,
 		ConfigDir:  configDir,
 		OwnerPID:   os.Getpid(),
+		Protocol:   unified_tunnel.ConfiguredProtocol(),
 	})
 	return err
 }

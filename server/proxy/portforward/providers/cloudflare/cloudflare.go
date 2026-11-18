@@ -258,6 +258,7 @@ func (p *OwnedProvider) Start(port int, hostname string) (*portforward.TunnelHan
 		u, err := b.UpsertRoute(context.Background(), cfbackend.Route{
 			Hostname: hostname,
 			Origin:   origin,
+			Protocol: unified_tunnel.ConfiguredProtocol(),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("cloudflared backend upsert: %w", err)

@@ -104,6 +104,12 @@ func (tg *TunnelGroup) IsHealthCheckPaused(mappingID string) bool {
 	return time.Now().Before(pauseUntil)
 }
 
+// RestartNow forces the group's connector to restart with the current
+// process-wide settings (e.g. a freshly changed edge protocol).
+func (tg *TunnelGroup) RestartNow() error {
+	return tg.tunnelMgr.RestartNow()
+}
+
 func (tg *TunnelGroup) RestartMapping(mappingID string) error {
 	fmt.Printf("[tunnel-group:%s] RestartMapping: triggering restart for mappingID=%s\n", tg.name, mappingID)
 

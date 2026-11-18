@@ -2,6 +2,7 @@ import '../theme.css';
 import { useNavigate } from 'react-router-dom';
 import { SecuritySection } from './settings/SecuritySection';
 import { WebAccessSection } from './settings/WebAccessSection';
+import { HostServicesSection } from './settings/HostServicesSection';
 import { ExposedUrlsSection } from './settings/ExposedUrlsSection';
 import { GitSettingsContent } from './settings/GitSettings';
 import { CloudflareSettingsContent } from './settings/CloudflareSettingsView';
@@ -35,6 +36,10 @@ export function SettingsView() {
             <WebAccessSection />
 
             <ExposedUrlsSection />
+
+            <Section title="Host Services">
+                <HostServicesSection />
+            </Section>
 
             <Section title="Git">
                 <GitSettingsContent />
