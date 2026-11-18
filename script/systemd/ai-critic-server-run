@@ -1,0 +1,51 @@
+#!/bin/sh
+# Launch the newest ai-critic-server-vN sitting next to this script.
+#
+# Why this exists: the systemd unit used to name an exact binary
+# (ai-critic-server-v3). Every upgrade writes ai-critic-server-vN+1 and the
+# running process exec-restarts into it, so the unit kept pointing at a build
+# from weeks ago — a `systemctl restart` or a reboot silently rolled back.
+#
+# An operator can hold a known-good build by writing its file name into
+# ai-critic-server.pin next to this script.
+set -eu
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+base=ai-critic-server
+
+if [ -s "$dir/$base.pin" ]; then
+    pin=$(tr -d '[:space:]' < "$dir/$base.pin")
+    if [ -n "$pin" ] && [ -x "$dir/$pin" ]; then
+        exec "$dir/$pin" "$@"
+    fi
+    echo "ai-critic-server-run: pinned binary '$pin' is missing or not executable" >&2
+    exit 1
+fi
+
+newest=
+newest_ver=-1
+
+for f in "$dir/$base"-v*; do
+    # Unmatched glob stays literal; also skip the launcher and any non-file.
+    [ -f "$f" ] && [ -x "$f" ] || continue
+    name=${f##*/}
+    ver=${name#"$base"-v}
+    case $ver in
+        '' | *[!0-9]*) continue ;;
+    esac
+    if [ "$ver" -gt "$newest_ver" ]; then
+        newest_ver=$ver
+        newest=$f
+    fi
+done
+
+if [ -z "$newest" ]; then
+    # No versioned binary: fall back to an unversioned one if present.
+    if [ -x "$dir/$base" ]; then
+        exec "$dir/$base" "$@"
+    fi
+    echo "ai-critic-server-run: no $base-vN or $base binary in $dir" >&2
+    exit 1
+fi
+
+exec "$newest" "$@"
