@@ -41,6 +41,7 @@ var (
 	integrationJournalctl = defaultJournalctl
 	integrationListen     = daemon.IsPortListening
 	integrationPing       = defaultPing
+	integrationStat       = os.Stat
 )
 
 func runIntegrationSystemctl(args []string) error {
@@ -164,8 +165,31 @@ func resolveInstall(port int, cookieName string) (bin, workdir, home, unit strin
 	if home == "" {
 		home = "/root"
 	}
-	unit = generateSystemdUnit(bin, workdir, home, port, cookieName)
+	// Upgrades write ai-critic-server-vN+1 and exec-restart into it, so a unit
+	// naming an exact binary goes stale: a later `systemctl restart` or reboot
+	// silently rolls back to the build that existed at install time. Prefer the
+	// launcher, which resolves the newest versioned binary on every start.
+	execStart := bin
+	if launcher := launcherPathFor(bin); launcher != "" {
+		execStart = launcher
+	}
+	unit = generateSystemdUnit(execStart, workdir, home, port, cookieName)
 	return bin, workdir, home, unit, nil
+}
+
+// launcherName is the version-resolving launcher that sits next to the server
+// binaries.
+const launcherName = "ai-critic-server-run"
+
+// launcherPathFor returns the launcher next to bin when it exists and is
+// executable, or "" when this install has none (keep the exact-binary unit).
+func launcherPathFor(bin string) string {
+	launcher := filepath.Join(filepath.Dir(bin), launcherName)
+	info, err := integrationStat(launcher)
+	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+		return ""
+	}
+	return launcher
 }
 
 func generateSystemdUnit(bin, workdir, home string, port int, cookieName string) string {

@@ -27,6 +27,7 @@ func resetIntegrationHooks() {
 	}
 	integrationListen = func(int) bool { return false }
 	integrationPing = func(int) (int, string, error) { return 200, "pong", nil }
+	integrationStat = os.Stat
 }
 
 func TestGenerateSystemdUnit(t *testing.T) {
@@ -323,5 +324,87 @@ func TestJournalctlArgs(t *testing.T) {
 	got := strings.Join(journalctlArgs(0, true), " ")
 	if got != "-u ai-critic-server -n 100 --no-pager -f" {
 		t.Fatalf("default args: %q", got)
+	}
+}
+
+// A unit that names an exact binary goes stale on the next upgrade: the newest
+// build is ai-critic-server-vN+1 while ExecStart still names the old one, so a
+// systemctl restart or reboot silently rolls back. When the launcher is present
+// the unit must point at it instead.
+func TestGenerateUnitPrefersLauncher(t *testing.T) {
+	resetIntegrationHooks()
+	t.Cleanup(resetIntegrationHooks)
+
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ai-critic-server-v12")
+	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(dir, launcherName)
+	if err := os.WriteFile(launcher, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	integrationExecutable = func() (string, error) { return bin, nil }
+	integrationHome = "/root"
+
+	resolved, rerr := filepath.EvalSymlinks(bin)
+	if rerr != nil {
+		t.Fatalf("EvalSymlinks(%s): %v", bin, rerr)
+	}
+	launcher = filepath.Join(filepath.Dir(resolved), launcherName)
+
+	_, _, _, unit, err := resolveInstall(23712, auth.DefaultCookieName)
+	if err != nil {
+		t.Fatalf("resolveInstall: %v", err)
+	}
+	if !strings.Contains(unit, "ExecStart="+launcher+" --port 23712") {
+		t.Fatalf("unit must ExecStart the launcher, got:\n%s", unit)
+	}
+	if strings.Contains(unit, "ExecStart="+bin) {
+		t.Fatalf("unit must not ExecStart the versioned binary, got:\n%s", unit)
+	}
+}
+
+// Without a launcher the historical exact-binary unit is preserved.
+func TestGenerateUnitFallsBackToExactBinary(t *testing.T) {
+	resetIntegrationHooks()
+	t.Cleanup(resetIntegrationHooks)
+
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ai-critic-server-v12")
+	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	integrationExecutable = func() (string, error) { return bin, nil }
+	integrationHome = "/root"
+
+	_, _, _, unit, err := resolveInstall(23712, auth.DefaultCookieName)
+	if err != nil {
+		t.Fatalf("resolveInstall: %v", err)
+	}
+	resolved, rerr := filepath.EvalSymlinks(bin)
+	if rerr != nil {
+		t.Fatalf("EvalSymlinks(%s): %v", bin, rerr)
+	}
+	if !strings.Contains(unit, "ExecStart="+resolved+" --port 23712") {
+		t.Fatalf("unit must ExecStart the binary when no launcher exists, got:\n%s", unit)
+	}
+}
+
+// A non-executable file named like the launcher must not be used.
+func TestLauncherRequiresExecutableBit(t *testing.T) {
+	resetIntegrationHooks()
+	t.Cleanup(resetIntegrationHooks)
+
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ai-critic-server-v12")
+	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, launcherName), []byte("#!/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := launcherPathFor(bin); got != "" {
+		t.Fatalf("launcherPathFor used a non-executable file: %q", got)
 	}
 }
