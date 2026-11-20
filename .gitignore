@@ -17,6 +17,9 @@ dist
 /ai-critic-server-linux-amd64*
 /ai-critic-server-*
 
+# GitHub release upload token (script/github/release)
+.upload-credentials.json
+
 .server-credentials
 .server-domains.json
 .ai-critic-enc-key

@@ -4,11 +4,13 @@ AI Critic is a developer tool that combines AI-powered code review with a mobile
 
 ## Install
 
-Download the latest release for your platform (Linux amd64/arm64):
+Download the latest release for your platform (Linux and macOS, amd64/arm64):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/WiseWiseWiser/mobile-coding-connector/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xhd2015/ai-critic/master/install.sh | bash
 ```
+
+Pin a specific version with `INSTALL_TAG=v0.0.75`.
 
 This downloads the `ai-critic-server` binary to the current directory.
 
@@ -199,7 +201,7 @@ Then open http://localhost:23712 in your browser.
 ### Build from source
 
 ```bash
-git clone https://github.com/WiseWiseWiser/mobile-coding-connector.git && cd mobile-coding-connector
+git clone https://github.com/xhd2015/ai-critic.git && cd ai-critic
 go run ./script/build
 ```
 

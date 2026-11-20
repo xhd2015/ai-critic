@@ -14,7 +14,7 @@ import (
 )
 
 // Canonical git origin for ai-critic source checkouts (module path differs).
-const aiCriticCanonicalOrigin = "https://github.com/WiseWiseWiser/mobile-coding-connector.git"
+const aiCriticCanonicalOrigin = "https://github.com/xhd2015/ai-critic.git"
 
 const serverUpgradeHelp = `Usage: remote-agent server upgrade --from-source [--source-dir DIR] [options]
 
@@ -22,7 +22,7 @@ Build the ai-critic server from local source for the remote OS/arch, upload it
 via upload-next, and restart the remote server.
 
 When --source-dir is omitted, scan local git checkouts whose origin matches
-ai-critic's canonical origin (github.com/WiseWiseWiser/mobile-coding-connector),
+ai-critic's canonical origin (github.com/xhd2015/ai-critic),
 preferring a checkout under the current directory, then one that contains cwd,
 then a main checkout. Prints which source directory is used.
 

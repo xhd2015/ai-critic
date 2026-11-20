@@ -16,6 +16,7 @@ Example: `go run ./script/server/run`
 - `bundle` - Build frontend and backend into a single host-platform `ai-critic-server-<goos>-<goarch>` binary.
 - `bundle/for-linux` - Build frontend and cross-compile a single `ai-critic-server-linux-amd64` bundle.
 - `release` - Build frontend once, then cross-compile release binaries for `linux/amd64` and `linux/arm64`.
+- `github/release` - Build and upload GitHub Release assets (`ai-critic-server-<tag>-<os>-<arch>`) for darwin/linux amd64+arm64; requires a clean worktree at a `v*` tag and `.upload-credentials.json`.
 - `remote-agent/build` - Build the `remote-agent` CLI (default output `/tmp/remote-agent`); code signs on macOS.
 - `remote-agent/install` - Build `remote-agent` and install it into `$GOBIN` (else `<GOPATH>/bin`); signs on macOS.
 - `run` - Start local dev mode (build server, start Vite, run server with `--dev`).

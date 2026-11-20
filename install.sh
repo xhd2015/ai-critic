@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
+# Install ai-critic-server from GitHub Releases.
+#
+#   curl -fsSL https://raw.githubusercontent.com/xhd2015/ai-critic/master/install.sh | bash
+#   INSTALL_TAG=v0.0.75 bash install.sh
 set -euo pipefail
 
-REPO="WiseWiseWiser/mobile-coding-connector"
+REPO="https://github.com/xhd2015/ai-critic"
 BINARY_NAME="ai-critic-server"
+
+error() {
+    echo "Error: $*" >&2
+    exit 1
+}
 
 # Check if curl is available
 if ! command -v curl &> /dev/null; then
@@ -23,9 +32,7 @@ case "$OS" in
     linux)   OS="linux" ;;
     darwin)  OS="darwin" ;;
     *)
-        echo "Error: unsupported OS: $OS"
-        echo "This installer only supports Linux."
-        exit 1
+        error "unsupported OS: $OS (pre-built binaries exist for linux and darwin)"
         ;;
 esac
 
@@ -33,45 +40,37 @@ esac
 ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64|amd64)   ARCH="amd64" ;;
-    aarch64|arm64)   ARCH="arm64" ;;
+    aarch64|arm64)  ARCH="arm64" ;;
     *)
-        echo "Error: unsupported architecture: $ARCH"
-        echo "This installer supports amd64 and arm64."
-        exit 1
+        error "unsupported architecture: $ARCH (pre-built binaries exist for amd64 and arm64)"
         ;;
 esac
 
-# Only linux binaries are provided in releases
-if [ "$OS" != "linux" ]; then
-    echo "Error: pre-built binaries are only available for Linux."
-    echo "Detected OS: $OS ($ARCH)"
-    echo "Please build from source: go run ./script/build"
-    exit 1
+# Asset names embed the release tag: ai-critic-server-v0.0.75-linux-amd64
+if [ -n "${INSTALL_TAG:-}" ]; then
+    TAG="${INSTALL_TAG}"
+    if [ "${TAG#v}" = "$TAG" ]; then
+        TAG="v${TAG}"
+    fi
+else
+    LATEST_URL="${REPO}/releases/latest"
+    echo "Fetching latest release from ${LATEST_URL}..."
+    LOCATION=$(curl -sI "$LATEST_URL" | grep -i '^location: ' | tail -1 | tr -d '\r')
+    if [ -z "$LOCATION" ]; then
+        error "could not resolve the latest release from ${LATEST_URL}"
+    fi
+    TAG="${LOCATION##*/}"
 fi
 
-ASSET_NAME="${BINARY_NAME}-${OS}-${ARCH}"
+BASE_URL="${REPO}/releases/download/${TAG}"
+ASSET_NAME="${BINARY_NAME}-${TAG}-${OS}-${ARCH}"
+DOWNLOAD_URL="${BASE_URL}/${ASSET_NAME}"
 
 echo "Detected: ${OS}/${ARCH}"
 echo "Downloading: ${ASSET_NAME}"
 
-# Get the latest release download URL from GitHub API
-RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
-echo "Fetching latest release from ${RELEASE_URL}..."
-
-DOWNLOAD_URL=$(curl -sL "$RELEASE_URL" | grep -o "\"browser_download_url\": *\"[^\"]*${ASSET_NAME}\"" | head -1 | sed 's/.*"browser_download_url": *"\(.*\)"/\1/')
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo "Error: could not find ${ASSET_NAME} in the latest release."
-    echo "Available assets:"
-    curl -sL "$RELEASE_URL" | grep '"browser_download_url"' | sed 's/.*"browser_download_url": *"\(.*\)"/  \1/' | head -20
-    exit 1
-fi
-
-echo "Downloading from: ${DOWNLOAD_URL}"
-
-# Download to current directory
 OUTPUT="./${BINARY_NAME}"
-curl -fSL -o "$OUTPUT" "$DOWNLOAD_URL"
+curl -fSL -o "$OUTPUT" "$DOWNLOAD_URL" || error "failed to download ${DOWNLOAD_URL}"
 chmod +x "$OUTPUT"
 
 echo ""
