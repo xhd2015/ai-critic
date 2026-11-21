@@ -1,3 +1,6 @@
+import type { AutoCloseStatus } from './browserWire';
+import { BrowserAutoCloseEntry } from './BrowserAutoCloseEntry';
+import { idleChipLabel } from './autoClose';
 import { useRevealCurrent } from './useRevealCurrent';
 import { sweepBlocker, sweepWindowCount } from './sweep';
 import { closeTargetFor, closeWindowBlocker } from './windowClose';
@@ -25,6 +28,9 @@ export interface BrowserWindowsRailProps {
     sweepPlanning: boolean;
     /** The element comes along so the dialog can hand focus back to it. */
     onSweep: (trigger: HTMLButtonElement) => void;
+    /** The idle-window rule, in the sheet's footer above the sweep. */
+    autoClose: AutoCloseStatus | null;
+    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
 }
 
 /**
@@ -151,9 +157,14 @@ export function BrowserWindowsRail(props: BrowserWindowsRailProps) {
                                 ? 'No connected Chrome window'
                                 : blocker || (closeTargetFor(row) ? '' : 'Window cannot be addressed');
                             const kind = row.windowType && row.windowType !== 'normal' ? ` · ${row.windowType}` : '';
+                            const idle = props.autoClose?.enabled
+                                ? idleChipLabel(row, props.autoClose.idle_seconds, true)
+                                : '';
                             const meta = row.attached === false
                                 ? `${row.sessionId ?? 'session'} · disconnected`
-                                : `${row.sessionId ?? 'window'}${kind} · ${row.current ? 'focused' : 'background'}`;
+                                : `${row.sessionId ?? 'window'}${kind} · ${row.current ? 'focused' : 'background'}${
+                                      idle ? ` · ${idle}` : ''
+                                  }`;
                             return (
                                 <div key={row.key} className={`bwp-wrowgroup${row.key === selectedKey ? ' is-sel' : ''}`}>
                                     <div className="bwp-wrow">
@@ -226,6 +237,9 @@ export function BrowserWindowsRail(props: BrowserWindowsRailProps) {
               window-level action that has no per-window home, and hiding it
               behind the expander would make it undiscoverable on a phone.
             */}
+            <div className="bwp-railautofoot">
+                <BrowserAutoCloseEntry status={props.autoClose} rows={rows} busy={busy} readOnly={readOnly} supported={windowCloseSupported} surface="phone" onSave={props.onAutoClose} />
+            </div>
             <div className="bwp-railfoot">
                 <button
                     type="button"

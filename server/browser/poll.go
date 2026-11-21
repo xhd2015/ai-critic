@@ -27,6 +27,9 @@ func (m *Manager) handleFrame(w http.ResponseWriter, r *http.Request) {
 		}
 		after = uint32(parsed)
 	}
+	// Watching the mirror is using this window: it must never idle out from
+	// under the person scrolling it.
+	m.touchCurrentWindow()
 	// First touch may find capture stopped: start it so the poll has a frame
 	// to hand out instead of 304ing forever on a stale cache.
 	m.hub.touchPoll()
@@ -72,6 +75,7 @@ func (m *Manager) handleInput(w http.ResponseWriter, r *http.Request) {
 	if body.Button == 0 && (body.Kind == InputTap || body.Kind == InputDown || body.Kind == InputUp || body.Kind == InputMove) {
 		body.Button = ButtonLeft
 	}
+	m.touchCurrentWindow()
 	m.hub.enqueueInput(body)
 	writeJSON(w, http.StatusOK, m.Snapshot())
 }

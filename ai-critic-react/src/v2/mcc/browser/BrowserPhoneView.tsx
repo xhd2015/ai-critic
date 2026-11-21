@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { BrowserKeys } from './BrowserKeys';
 import { BrowserPhoneBottom } from './BrowserPhoneBottom';
+import { useAutoCloseToast } from './useAutoCloseToast';
 import { BrowserPhoneTop } from './BrowserPhoneTop';
 import { BrowserProbeBanner, BrowserPollBadge } from './BrowserTransport';
 import { BrowserSheet } from './BrowserSheet';
@@ -11,6 +12,7 @@ import type { PollInterval } from './browserPollStream';
 import type { SweepResult } from './useBrowserSessions';
 import type { ProbeEvidence } from './browserStream';
 import type {
+    AutoCloseStatus,
     BrowserMode,
     BrowserTab,
     ConnectionState,
@@ -34,6 +36,8 @@ export interface BrowserPhoneViewProps {
     busy: boolean;
     readOnly: boolean;
     windowCloseSupported: boolean;
+    autoClose: AutoCloseStatus | null;
+    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
     helpOpen: boolean;
     newWindowError: string | null;
     preset: string;
@@ -96,6 +100,7 @@ export interface BrowserPhoneViewProps {
  * the desktop toolbar, rail or dock ever entering the tree on a phone.
  */
 export function BrowserPhoneView(props: BrowserPhoneViewProps) {
+    useAutoCloseToast(props.autoClose, props.onToast);
     const activeTab = props.tabs.find((tab) => tab.tab_id === props.activeTabId);
     const title = activeTab
         ? tabLabel(activeTab)
@@ -163,6 +168,8 @@ export function BrowserPhoneView(props: BrowserPhoneViewProps) {
                 busy={props.busy}
                 readOnly={props.readOnly}
                 windowCloseSupported={props.windowCloseSupported}
+                autoClose={props.autoClose}
+                onAutoClose={props.onAutoClose}
                 helpOpen={props.helpOpen}
                 newWindowError={props.newWindowError}
                 preset={props.preset}

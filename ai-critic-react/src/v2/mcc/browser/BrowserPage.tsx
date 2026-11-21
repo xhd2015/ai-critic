@@ -387,6 +387,8 @@ export default function BrowserPage() {
                         onRetryWs={retryWs}
                         onPollInterval={setPollInterval}
                         windowCloseSupported={sessions.windowCloseSupported}
+                        autoClose={sessions.autoClose}
+                        onAutoClose={sessions.saveAutoClose}
                         helpOpen={helpOpen}
                         newWindowError={sessions.newWindowError}
                         preset={status?.preset ?? 'mac'}
@@ -448,6 +450,8 @@ export default function BrowserPage() {
                     activeTabId={activeTabId}
                     readOnly={readOnly}
                     windowCloseSupported={sessions.windowCloseSupported}
+                    autoClose={sessions.autoClose}
+                    onAutoClose={sessions.saveAutoClose}
                     sessionless={sessionless}
                     busy={sessions.busy}
                     loading={sessions.loading}

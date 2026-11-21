@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BrowserDock } from './BrowserDock';
+import { useAutoCloseToast } from './useAutoCloseToast';
 import { BrowserKeys } from './BrowserKeys';
 import { BrowserRail } from './BrowserRail';
 import { BrowserTabs } from './BrowserTabs';
@@ -7,6 +8,7 @@ import { BrowserToolbar } from './BrowserToolbar';
 import { BrowserUrlBar } from './BrowserUrlBar';
 import type { SweepResult } from './useBrowserSessions';
 import type {
+    AutoCloseStatus,
     BrowserMode,
     BrowserStatus,
     BrowserTab,
@@ -24,6 +26,8 @@ export interface BrowserDesktopViewProps {
     activeTabId: number;
     readOnly: boolean;
     windowCloseSupported: boolean;
+    autoClose: AutoCloseStatus | null;
+    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
     sessionless: boolean;
     busy: boolean;
     loading: boolean;
@@ -68,6 +72,7 @@ export interface BrowserDesktopViewProps {
 
 /** The desktop cockpit: rail, toolbar, tabs, URL bar, keys and dock. */
 export function BrowserDesktopView(props: BrowserDesktopViewProps) {
+    useAutoCloseToast(props.autoClose, props.onToast);
     return (
         <>
             <BrowserRail
@@ -78,6 +83,8 @@ export function BrowserDesktopView(props: BrowserDesktopViewProps) {
                 busy={props.busy}
                 readOnly={props.readOnly}
                 windowCloseSupported={props.windowCloseSupported}
+                autoClose={props.autoClose}
+                onAutoClose={props.onAutoClose}
                 open={props.railOpen}
                 onSelect={props.onSelectSession}
                 onOpenTab={props.onOpenTab}

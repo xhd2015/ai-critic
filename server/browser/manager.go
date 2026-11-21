@@ -74,10 +74,14 @@ type Config struct {
 	Preset    string  `json:"preset"`
 	SessionID string  `json:"session_id,omitempty"`
 	MacBounds *Bounds `json:"mac_bounds,omitempty"`
+	// AutoClose is the idle-window rule. Nil means "never configured", which is
+	// not the same as "configured off": the default interval still applies.
+	AutoClose *AutoCloseConfig `json:"auto_close,omitempty"`
 }
 
 func defaultConfig() Config {
-	return Config{Mode: ModeCast, Preset: "mac", SessionID: SessionID}
+	autoClose := defaultAutoCloseConfig()
+	return Config{Mode: ModeCast, Preset: "mac", SessionID: SessionID, AutoClose: &autoClose}
 }
 
 // browserConfPath is resolved per call, not captured at init, so tests and
@@ -107,6 +111,12 @@ func (c *Config) normalize() {
 	if strings.TrimSpace(c.SessionID) == "" {
 		c.SessionID = SessionID
 	}
+	if c.AutoClose == nil {
+		cfg := defaultAutoCloseConfig()
+		c.AutoClose = &cfg
+	}
+	normalized := c.AutoClose.normalized()
+	c.AutoClose = &normalized
 }
 
 // saveSettings persists a preset/mode choice without letting a transient
@@ -228,6 +238,19 @@ type Manager struct {
 	directSupported bool
 
 	hub *hub
+
+	// autoMu guards the idle-window rule and its activity ledger. It is a
+	// separate mutex from mu on purpose: the ticker and the sessions poll both
+	// read it, and neither may wait behind a Chrome handshake.
+	autoMu        sync.Mutex
+	autoClose     AutoCloseConfig
+	autoActive    map[int64]*windowActivity
+	autoRecords   []AutoCloseRecord
+	autoSeq       int64
+	autoJobs      int
+	autoSupported bool
+	autoNow       func() time.Time
+	autoLoopOnce  sync.Once
 }
 
 var (
@@ -263,12 +286,15 @@ func daemonPort() int {
 func New(port int) *Manager {
 	cfg := loadConfig()
 	m := &Manager{
-		d:         newDaemon(port),
-		port:      port,
-		binary:    findBinary(),
-		preset:    cfg.Preset,
-		mode:      cfg.Mode,
-		sessionID: cfg.SessionID,
+		d:          newDaemon(port),
+		port:       port,
+		binary:     findBinary(),
+		preset:     cfg.Preset,
+		mode:       cfg.Mode,
+		sessionID:  cfg.SessionID,
+		autoClose:  *cfg.AutoClose,
+		autoActive: make(map[int64]*windowActivity),
+		autoNow:    time.Now,
 	}
 	// The remembered Mac window survives restarts: the saved preset is often
 	// a phone size, so the first ensure would otherwise shrink the window
@@ -356,6 +382,12 @@ func (m *Manager) job(ctx context.Context, tabID int64, typ string, params any, 
 func (m *Manager) jobIn(ctx context.Context, sessionID string, tabID int64, typ string, params any, timeout time.Duration) (json.RawMessage, error) {
 	if sessionID == "" {
 		sessionID = m.sessionIDValue()
+	}
+	// A job in flight means somebody (or something) is using the browser right
+	// now; a tick that runs meanwhile must stand down rather than close a
+	// window mid-conversation.
+	if tracked := m.beginBrowserJob(typ); tracked {
+		defer m.finishBrowserJob()
 	}
 	if windowID, ok := windowIDFromSessionlessID(sessionID); ok && m.directSupportedValue() {
 		return m.d.jobDirect(ctx, windowID, tabID, typ, params, timeout)

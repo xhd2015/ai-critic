@@ -4627,3 +4627,579 @@ button.bw-crumb:hover {
     font-weight: 700;
     text-transform: uppercase;
 }
+
+/* ------------------------------------------------- auto-close idle windows */
+
+/* Shared by the desktop rail footer and the phone sheet footer: one rule
+   entry, one editor. The palette matches the rail in both shells. */
+.bwp-auto {
+    margin: 8px 10px 0;
+    padding: 8px 9px;
+    border: 1px solid #253143;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #101722, #0c121a);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.bwp-auto.is-phone {
+    margin: 0 0 7px;
+}
+
+/* The phone sheet pins the rule above the sweep, inside the rail's own footer
+   gutter, so both actions read as one block. */
+.bwp-railautofoot {
+    flex: none;
+    padding: 0 6px;
+}
+
+.bwp-auto.is-off {
+    border-color: #222c39;
+    background: #0c1219;
+}
+
+.bwp-actorow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bwp-automain {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bwp-autoico {
+    flex: none;
+    width: 25px;
+    height: 25px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(77, 141, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(77, 141, 255, 0.12);
+    color: #8fb6ff;
+}
+
+.bwp-autoico svg {
+    width: 14px;
+    height: 14px;
+}
+
+.bwp-auto.is-off .bwp-autoico {
+    border-color: #253040;
+    background: #151c26;
+    color: #718096;
+}
+
+.bwp-autocopy {
+    flex: 1;
+    min-width: 0;
+    display: block;
+}
+
+.bwp-autotitle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #dbe6f4;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.bwp-autodot {
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #4d5b6c;
+}
+
+.bwp-autodot.is-on {
+    background: #57d49a;
+    box-shadow: 0 0 7px rgba(87, 212, 154, 0.55);
+}
+
+.bwp-autosub {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #77869a;
+    font: 500 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-autoerr {
+    margin: 6px 0 0;
+    color: #ff8b84;
+    font-size: 9.5px;
+    line-height: 1.4;
+}
+
+.bwp-switch {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 21px;
+    padding: 2px;
+    border: 1px solid #2b3543;
+    border-radius: 999px;
+    background: #151d27;
+    cursor: pointer;
+    transition: background 0.16s, border-color 0.16s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bwp-switch i {
+    display: block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #74839a;
+    transition: transform 0.16s ease, background 0.16s;
+}
+
+.bwp-switch.on {
+    border-color: rgba(77, 141, 255, 0.55);
+    background: rgba(77, 141, 255, 0.24);
+}
+
+.bwp-switch.on i {
+    transform: translateX(15px);
+    background: #a7c8ff;
+}
+
+.bwp-switch:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Collapsed phone rail: the glyph alone, still a full-size tap target. */
+.bwp-rail:not(.is-open) .bwp-railautofoot {
+    padding: 0;
+}
+
+.bwp-rail:not(.is-open) .bwp-auto {
+    width: 40px;
+    height: 38px;
+    margin: 0 auto 6px;
+    padding: 5px;
+}
+
+.bwp-rail:not(.is-open) .bwp-auto .bwp-autocopy,
+.bwp-rail:not(.is-open) .bwp-auto .bwp-switch {
+    display: none;
+}
+
+.bwp-rail:not(.is-open) .bwp-automain {
+    justify-content: center;
+}
+
+/* ----------------------------------------------------- auto-close editor */
+
+.bwp-aclayer {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(2, 4, 8, 0.66);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+.bwp-aclayer.is-phone {
+    position: absolute;
+    align-items: flex-end;
+    padding: 0;
+}
+
+.bwp-acdlg {
+    width: 428px;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(180deg, #141c27, #0f151e);
+    box-shadow: 0 34px 90px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.bwp-aclayer.is-phone .bwp-acdlg {
+    width: 100%;
+    max-height: 90%;
+    border-radius: 22px 22px 0 0;
+}
+
+.bwp-achead {
+    position: relative;
+    flex: none;
+    padding: 15px 46px 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bwp-achead .kicker {
+    color: #7fa9ff;
+}
+
+.bwp-achead h3 {
+    margin: 8px 0 4px;
+    color: #f4f8ff;
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.012em;
+}
+
+.bwp-achead p {
+    margin: 0;
+    color: #94a2b5;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.bwp-acx {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 27px;
+    height: 27px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: #7d8ca0;
+    font-size: 17px;
+    cursor: pointer;
+}
+
+.bwp-acx:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #dfe8f4;
+}
+
+.bwp-acbody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.bwp-actorow {
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bwp-accopy {
+    flex: 1;
+    min-width: 0;
+}
+
+.bwp-aclabel {
+    color: #e7eef8;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.bwp-achint {
+    margin-top: 3px;
+    color: #7e8da1;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+.bwp-acsec {
+    padding: 13px 16px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bwp-acsechead {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 9px;
+}
+
+.bwp-acsechead .kicker {
+    flex: 1;
+}
+
+.bwp-acsecval {
+    color: #9fb0c5;
+    font: 650 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-acseg {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid #253040;
+    border-radius: 9px;
+    background: #0a0f16;
+}
+
+.bwp-acseg button {
+    height: 27px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: #8393a8;
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bwp-acseg button:hover:not(:disabled) {
+    background: #151f2b;
+    color: #bccbdd;
+}
+
+.bwp-acseg button.on {
+    background: #1d2a3b;
+    color: #dce8f7;
+    box-shadow: inset 0 0 0 1px rgba(127, 169, 255, 0.24);
+}
+
+.bwp-accustom {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.bwp-accustom input,
+.bwp-accustom select {
+    height: 29px;
+    padding: 0 8px;
+    border: 1px solid #283547;
+    border-radius: 7px;
+    background: #0a0f16;
+    color: #d7e3f1;
+    font-family: inherit;
+    font-size: 11px;
+}
+
+.bwp-accustom input {
+    width: 74px;
+}
+
+.bwp-accustom .bwp-achint {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9px;
+    color: #67768a;
+}
+
+.bwp-acpreview {
+    margin: 10px 0 0;
+    padding: 8px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.02);
+    color: #94a3b7;
+    font-size: 10.5px;
+    line-height: 1.55;
+}
+
+.bwp-acpreview b {
+    color: #e4edf8;
+    font-weight: 650;
+}
+
+.bwp-acexempt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 11px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bwp-acexempt span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #7f8ea2;
+    font-size: 9.5px;
+}
+
+.bwp-acexempt svg {
+    width: 10px;
+    height: 10px;
+    color: #55b98c;
+}
+
+.bwp-aclog {
+    padding: 12px 16px 4px;
+}
+
+.bwp-account {
+    color: #6c7b8f;
+    font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-acreclist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 190px;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.13);
+}
+
+.bwp-acrecl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+}
+
+.bwp-acrecl + .bwp-acrecl {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bwp-acrecico {
+    flex: none;
+    width: 19px;
+    height: 19px;
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #7e8ea4;
+}
+
+.bwp-acrecico svg {
+    width: 11px;
+    height: 11px;
+}
+
+.bwp-acrecbody {
+    flex: 1;
+    min-width: 0;
+}
+
+.bwp-acrection {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #cbd7e6;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.bwp-acrecm {
+    margin-top: 2px;
+    color: #6b7a8e;
+    font: 500 8.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-acrectime {
+    flex: none;
+    color: #66758a;
+    font: 500 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-acempty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 20px 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    color: #64738a;
+    font-size: 10px;
+    text-align: center;
+}
+
+.bwp-acempty b {
+    color: #93a2b6;
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.bwp-acnote {
+    margin: 8px 1px 0;
+    color: #5f6d80;
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.bwp-acerr {
+    margin: 9px 16px 0;
+    color: #ff8b84;
+    font-size: 10px;
+}
+
+.bwp-acfoot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(9, 14, 20, 0.5);
+}
+
+.bwp-acfootnote {
+    flex: 1;
+    color: #5e6c7f;
+    font: 500 8.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-acghost,
+.bwp-acsave {
+    height: 30px;
+    padding: 0 13px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bwp-acghost {
+    border: 1px solid #2a3646;
+    background: #121a24;
+    color: #b8c5d6;
+}
+
+.bwp-acghost:hover:not(:disabled) {
+    background: #17212d;
+}
+
+.bwp-acsave {
+    border: 1px solid rgba(77, 141, 255, 0.5);
+    background: rgba(77, 141, 255, 0.2);
+    color: #d5e6ff;
+    font-weight: 650;
+}
+
+.bwp-acsave:hover:not(:disabled) {
+    background: rgba(77, 141, 255, 0.3);
+}
+
+.bwp-acghost:disabled,
+.bwp-acsave:disabled,
+.bwp-acseg button:disabled,
+.bwp-accustom input:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

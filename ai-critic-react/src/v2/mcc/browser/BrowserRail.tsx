@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { BrowserTab, DaemonStatus, SessionInfo } from './browserWire';
+import type { AutoCloseStatus, BrowserTab, DaemonStatus, SessionInfo } from './browserWire';
+import { BrowserAutoCloseEntry } from './BrowserAutoCloseEntry';
+import { BrowserIdleMeta } from './BrowserIdleMeta';
 import { windowTabs } from './browserView';
 import { BrowserRailResults } from './BrowserRailResults';
 import { BrowserSearchRow } from './BrowserSearchRow';
@@ -22,6 +24,9 @@ export interface BrowserRailProps {
     busy: boolean;
     readOnly: boolean;
     windowCloseSupported: boolean;
+    /** The idle-window rule, shown in the rail footer and on each row. */
+    autoClose: AutoCloseStatus | null;
+    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
     open: boolean;
     onSelect: (session: string) => void;
     onOpenTab: (session: string, tabId: number) => void;
@@ -338,7 +343,7 @@ export function BrowserRail(props: BrowserRailProps) {
                                                 </span>
                                             )}
                                         </span>
-                                        {secondary && <span className="bw-sid">{secondary}</span>}
+                                        <BrowserIdleMeta session={session} autoClose={props.autoClose} secondary={secondary} />
                                     </button>
                                     <span className="bw-schip">{tabs.length}</span>
                                 </div>
@@ -496,6 +501,7 @@ export function BrowserRail(props: BrowserRailProps) {
                     )}
                 </button>
             </div>
+            <BrowserAutoCloseEntry status={props.autoClose} rows={visible} busy={busy} readOnly={props.readOnly} supported={props.windowCloseSupported} surface="rail" onSave={props.onAutoClose} />
             <footer className="bw-rail-foot">
                 browser-agent {daemon?.version ?? '—'} · :{daemon?.port ?? '—'}
             </footer>

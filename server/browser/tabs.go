@@ -708,13 +708,16 @@ type SessionInfo struct {
 	Adoptable bool `json:"adoptable,omitempty"`
 	// WindowType is the Chrome window kind for discovered windows: "normal",
 	// "popup", "app", "devtools". Empty for registry session rows.
-	WindowType  string        `json:"window_type,omitempty"`
-	WindowID    int64         `json:"window_id,omitempty"`
-	URL         string        `json:"url,omitempty"`
-	Preset      string        `json:"preset,omitempty"`
-	Mode        string        `json:"mode,omitempty"`
-	Viewport    Viewport      `json:"viewport"`
-	ActiveTabID int64         `json:"active_tab_id,omitempty"`
+	WindowType  string   `json:"window_type,omitempty"`
+	WindowID    int64    `json:"window_id,omitempty"`
+	URL         string   `json:"url,omitempty"`
+	Preset      string   `json:"preset,omitempty"`
+	Mode        string   `json:"mode,omitempty"`
+	Viewport    Viewport `json:"viewport"`
+	ActiveTabID int64    `json:"active_tab_id,omitempty"`
+	// IdleSeconds is how long this window has been unused, measured by the
+	// daemon's own ledger. Omitted for windows the ledger has never seen.
+	IdleSeconds int           `json:"idle_seconds,omitempty"`
 	Tabs        []TabInfo     `json:"tabs"`
 	Capture     CaptureStatus `json:"capture"`
 	Error       string        `json:"error,omitempty"`
@@ -731,9 +734,12 @@ type SessionsResponse struct {
 	WindowsSupported bool `json:"windows_supported"`
 	// WindowCloseSupported is true only when the same extension also advertises
 	// "window-close". Listing a window does not imply that it may be removed.
-	WindowCloseSupported bool   `json:"window_close_supported"`
-	ReadOnly             bool   `json:"read_only,omitempty"`
-	Error                string `json:"error,omitempty"`
+	WindowCloseSupported bool `json:"window_close_supported"`
+	// AutoClose is the idle-window rule plus the last ten closes, so the rail
+	// needs no second request to draw its footer and its record.
+	AutoClose AutoCloseStatus `json:"auto_close"`
+	ReadOnly  bool            `json:"read_only,omitempty"`
+	Error     string          `json:"error,omitempty"`
 }
 
 // Sessions lists the sessions worth showing: those with a live Chrome window
@@ -769,6 +775,7 @@ func (m *Manager) Sessions(ctx context.Context) SessionsResponse {
 	if err != nil {
 		resp.OK = false
 		resp.Error = err.Error()
+		resp.AutoClose = m.autoCloseStatus()
 		// Still report the current session so the page can render a rail even
 		// when the daemon cannot enumerate.
 		resp.Sessions = []SessionInfo{m.currentSessionInfo()}
@@ -1013,6 +1020,7 @@ func (m *Manager) Sessions(ctx context.Context) SessionsResponse {
 			if payload, err := m.fetchWindows(ctx, anchor); err == nil && payload.supportsAllWindows() {
 				resp.WindowsSupported = true
 				resp.WindowCloseSupported = payload.supportsWindowClose()
+				m.observeWindows(payload)
 				m.mergeWindows(&resp, payload)
 			}
 		}
@@ -1022,6 +1030,15 @@ func (m *Manager) Sessions(ctx context.Context) SessionsResponse {
 			resp.Sessions[i].Title, resp.Sessions[i].TitleTabID = windowTitleFromTabs(resp.Sessions[i].Tabs)
 		}
 	}
+
+	// Idle age and the auto-close rule travel with the same poll the rail
+	// already makes, so a window's countdown and the record stay live without
+	// a second timer on the client.
+	now := m.now()
+	for i := range resp.Sessions {
+		resp.Sessions[i].IdleSeconds = m.idleSecondsFor(resp.Sessions[i].WindowID, now)
+	}
+	resp.AutoClose = m.autoCloseStatus()
 
 	if m.hub != nil {
 		stats := m.hub.stats()

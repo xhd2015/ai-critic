@@ -11,6 +11,8 @@ export interface WindowRow {
     sessionless: boolean;
     /** Chrome window kind for discovered windows: "normal", "popup", "app". */
     windowType?: string;
+    /** Seconds since the daemon saw this window used, when the rule is on. */
+    idle_seconds?: number;
 }
 
 export type CloseTarget = { window_id: number } | { session_id: string };

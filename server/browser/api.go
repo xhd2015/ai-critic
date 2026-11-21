@@ -13,6 +13,9 @@ import (
 // middleware like every other /api route, so no extra token check is needed.
 func RegisterAPI(mux *http.ServeMux) {
 	m := Default()
+	// The rule is daemon-side: arms once here and keeps ticking while nobody has
+	// the page open. Each tick is a no-op unless the rule is enabled.
+	m.StartAutoCloseLoop(context.Background())
 	mux.HandleFunc("/api/browser/status", m.handleStatus)
 	mux.HandleFunc("/api/browser/ensure", m.handleEnsure)
 	mux.HandleFunc("/api/browser/navigate", m.handleNavigate)
@@ -24,6 +27,7 @@ func RegisterAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/browser/window/attach", m.handleWindowAttach)
 	mux.HandleFunc("/api/browser/window/close", m.handleWindowClose)
 	mux.HandleFunc("/api/browser/windows/sweep", m.handleWindowsSweep)
+	mux.HandleFunc("/api/browser/auto-close", m.handleAutoClose)
 	mux.HandleFunc("/api/browser/tab", m.handleTab)
 	mux.HandleFunc("/api/browser/frame", m.handleFrame)
 	mux.HandleFunc("/api/browser/input", m.handleInput)

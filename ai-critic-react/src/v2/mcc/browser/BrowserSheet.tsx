@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { BrowserMode, BrowserTab, SessionInfo } from './browserWire';
+import type { AutoCloseStatus, BrowserMode, BrowserTab, SessionInfo } from './browserWire';
 import { presetLabel, windowTabs } from './browserView';
 import { BrowserAddressEditor } from './BrowserAddressEditor';
 import { useAddressVisualViewport } from './useAddressVisualViewport';
@@ -40,6 +40,9 @@ interface BrowserSheetProps {
     readOnly: boolean;
     /** Extension advertises window-close; older builds can only list windows. */
     windowCloseSupported: boolean;
+    /** The idle-window rule and its record, owned by the sessions hook. */
+    autoClose: AutoCloseStatus | null;
+    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
     /** True while the shared help card is open, so the `?` can report it. */
     helpOpen: boolean;
     newWindowError: string | null;
@@ -100,6 +103,8 @@ export function BrowserSheet({
     busy,
     readOnly,
     windowCloseSupported,
+    autoClose,
+    onAutoClose,
     helpOpen,
     newWindowError,
     preset,
@@ -179,6 +184,7 @@ export function BrowserSheet({
         current: session.id === current,
         sessionless: Boolean(session.sessionless),
         windowType: session.window_type,
+        idle_seconds: session.idle_seconds,
     }));
     const liveCount = rows.filter((row) => row.attached).length;
     const currentRow =
@@ -446,6 +452,8 @@ export function BrowserSheet({
                                 }}
                                 sweepPlanning={sweep.planning}
                                 onSweep={sweep.start}
+                                autoClose={autoClose}
+                                onAutoClose={onAutoClose}
                             />
                             <div className="bwp-panetabs">
                                 <BrowserTabList

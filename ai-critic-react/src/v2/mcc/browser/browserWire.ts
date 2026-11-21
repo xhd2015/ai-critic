@@ -63,8 +63,31 @@ export interface SessionInfo {
     mode?: string;
     viewport?: { width: number; height: number };
     active_tab_id?: number;
+    /** Seconds since the daemon last saw this window used. */
+    idle_seconds?: number;
     tabs?: BrowserTab[];
     error?: string;
+}
+
+/** One window the auto-close rule closed. */
+export interface AutoCloseRecord {
+    id: number;
+    window_id: number;
+    session_id?: string;
+    title?: string;
+    tabs: number;
+    idle_seconds: number;
+    /** RFC3339, UTC. */
+    closed_at: string;
+}
+
+/** The idle-window rule plus its last ten closes, kept in daemon memory. */
+export interface AutoCloseStatus {
+    enabled: boolean;
+    idle_seconds: number;
+    /** This extension can execute the rule (all-windows + window-close). */
+    supported: boolean;
+    records: AutoCloseRecord[];
 }
 
 export interface SessionsResponse {
@@ -76,6 +99,7 @@ export interface SessionsResponse {
     windows_supported?: boolean;
     /** The extension can remove a whole Chrome window (window-close). */
     window_close_supported?: boolean;
+    auto_close?: AutoCloseStatus;
     read_only?: boolean;
     error?: string;
 }

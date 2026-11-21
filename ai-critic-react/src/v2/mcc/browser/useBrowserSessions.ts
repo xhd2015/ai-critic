@@ -4,12 +4,13 @@ import {
     fetchSessions,
     openNewSession,
     resolveTabClose as resolveTabCloseRequest,
+    saveAutoClose as saveAutoCloseRequest,
     sweepWindows,
     switchSession,
     tabOp,
 } from './browserApi';
 import type { TabOp } from './browserApi';
-import type { BrowserTab, DaemonStatus, SessionInfo, SweepWindowsResponse } from './browserWire';
+import type { AutoCloseStatus, BrowserTab, DaemonStatus, SessionInfo, SweepWindowsResponse } from './browserWire';
 
 /** The tab strip refreshes on this beat while nothing else is happening. */
 const POLL_MS = 8000;
@@ -44,6 +45,10 @@ export interface BrowserSessions {
     windowsSupported: boolean;
     /** Safe to offer whole-window close in this build of the extension. */
     windowCloseSupported: boolean;
+    /** The idle-window rule and its last ten closes, from the sessions poll. */
+    autoClose: AutoCloseStatus | null;
+    /** Saves the rule; resolves to the server's refusal, or null. */
+    saveAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
     readOnly: boolean;
     loading: boolean;
     busy: boolean;
@@ -80,6 +85,7 @@ export function useBrowserSessions(active: boolean): BrowserSessions {
     const [daemon, setDaemon] = useState<DaemonStatus | null>(null);
     const [windowsSupported, setWindowsSupported] = useState(false);
     const [windowCloseSupported, setWindowCloseSupported] = useState(false);
+    const [autoClose, setAutoClose] = useState<AutoCloseStatus | null>(null);
     const [readOnly, setReadOnly] = useState(false);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -101,6 +107,7 @@ export function useBrowserSessions(active: boolean): BrowserSessions {
             setDaemon(response.daemon);
             setWindowsSupported(Boolean(response.windows_supported));
             setWindowCloseSupported(Boolean(response.window_close_supported));
+            setAutoClose(response.auto_close ?? null);
             setReadOnly(Boolean(response.read_only));
             setError(null);
         } catch (err) {
@@ -254,12 +261,25 @@ export function useBrowserSessions(active: boolean): BrowserSessions {
         }
     };
 
+    const saveAutoClose = async (enabled: boolean, idleSeconds = 0): Promise<string | null> => {
+        try {
+            const status = await saveAutoCloseRequest(enabled, idleSeconds);
+            setAutoClose(status);
+            setError(null);
+            return null;
+        } catch (err) {
+            return message(err);
+        }
+    };
+
     return {
         sessions,
         current,
         daemon,
         windowsSupported,
         windowCloseSupported,
+        autoClose,
+        saveAutoClose,
         readOnly,
         loading,
         busy,

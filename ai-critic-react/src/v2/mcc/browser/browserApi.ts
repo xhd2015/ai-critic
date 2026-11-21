@@ -1,5 +1,6 @@
 import type {
     AttachWindowResponse,
+    AutoCloseStatus,
     BrowserStatus,
     CloseWindowResponse,
     SessionsResponse,
@@ -115,4 +116,13 @@ export function attachWindow(windowId: number, sessionId?: string): Promise<Atta
     return post('/api/browser/window/attach', { window_id: windowId, session_id: sessionId ?? '' }).then((response) =>
         json<AttachWindowResponse>(response),
     );
+}
+
+/** Saves the rule; omitting idleSeconds keeps the interval the daemon has. */
+export function saveAutoClose(enabled: boolean, idleSeconds = 0): Promise<AutoCloseStatus> {
+    return fetch('/api/browser/auto-close', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, idle_seconds: idleSeconds }),
+    }).then((response) => json<AutoCloseStatus>(response));
 }
