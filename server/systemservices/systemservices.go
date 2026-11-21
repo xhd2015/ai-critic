@@ -18,6 +18,7 @@ import (
 	"github.com/xhd2015/ai-critic/server/hostmon"
 	"github.com/xhd2015/ai-critic/server/openclaw"
 	"github.com/xhd2015/ai-critic/server/proxy/httpproxy"
+	"github.com/xhd2015/ai-critic/server/proxy/wsclient"
 	"github.com/xhd2015/ai-critic/server/proxy/wsproxy"
 	"github.com/xhd2015/ai-critic/server/services"
 )
@@ -144,6 +145,7 @@ func (wsProxyController) SystemStatus() services.SystemRuntime {
 		}
 		runtime.PublicURL = strings.Join(urls, ", ")
 		runtime.AutoStart = boolPtr(enabled > 0)
+		mergeClientStatus(&runtime, enabled > 0)
 		return runtime
 	}
 
@@ -173,18 +175,69 @@ func (wsProxyController) SystemStatus() services.SystemRuntime {
 	default:
 		runtime.Detail = "not running"
 	}
+	mergeClientStatus(&runtime, false)
 	return runtime
 }
 
-func (wsProxyController) StartSystem() error {
-	// Instance mode: start every enabled instance.
-	if instances, err := wsproxy.LoadInstances(); err == nil && len(instances) > 0 {
-		return wsproxy.GetManager().StartAllEnabled()
+// mergeClientStatus folds the WS Proxy client half into the server half's runtime
+// so one System Services card reports both. The client is optional: a machine
+// that only serves has no clients, and the line is omitted rather than showing
+// a permanent zero.
+func mergeClientStatus(runtime *services.SystemRuntime, serverAutoStart bool) {
+	clients, err := wsclient.GetManager().Statuses()
+	if err != nil || len(clients) == 0 {
+		return
 	}
-	return wsproxy.GetManager().Start(false)
+	live := 0
+	autoStart := false
+	parts := make([]string, 0, len(clients))
+	for _, c := range clients {
+		if c.Running {
+			live++
+			parts = append(parts, fmt.Sprintf("client %s:%d", "127.0.0.1", c.HTTPPort))
+		}
+		if c.AutoStart {
+			autoStart = true
+		}
+	}
+	runtime.Detail += fmt.Sprintf(" · %d/%d clients", live, len(clients))
+	if len(parts) > 0 {
+		runtime.Detail += " " + strings.Join(parts, ", ")
+	} else {
+		runtime.Detail += " not running"
+	}
+	runtime.AutoStart = boolPtr(serverAutoStart || autoStart)
+	if runtime.LogPath == "" {
+		runtime.LogPath = wsclient.LogPath()
+	}
+}
+
+func (wsProxyController) StartSystem() error {
+	// Start the client half too: a consumer-only machine has no instances, and
+	// leaving its client down would silently break the tunnel.
+	clientErr := wsclient.GetManager().BootAutoStart()
+
+	serverErr := func() error {
+		if instances, err := wsproxy.LoadInstances(); err == nil && len(instances) > 0 {
+			return wsproxy.GetManager().StartAllEnabled()
+		}
+		return wsproxy.GetManager().Start(false)
+	}()
+
+	// A consumer-only host has clients but no server config, so the server half
+	// failing is expected there and must not mask a healthy client.
+	if serverErr != nil {
+		store, _ := wsclient.LoadStore()
+		if store != nil && len(store.Clients) > 0 && clientErr == nil {
+			return nil
+		}
+		return serverErr
+	}
+	return clientErr
 }
 
 func (wsProxyController) StopSystem() error {
+	wsclient.GetManager().StopAll()
 	return wsproxy.GetManager().Stop()
 }
 

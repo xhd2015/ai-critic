@@ -452,6 +452,7 @@ export default function BrowserPage() {
                     windowCloseSupported={sessions.windowCloseSupported}
                     autoClose={sessions.autoClose}
                     onAutoClose={sessions.saveAutoClose}
+                    helpOpen={helpOpen}
                     sessionless={sessionless}
                     busy={sessions.busy}
                     loading={sessions.loading}

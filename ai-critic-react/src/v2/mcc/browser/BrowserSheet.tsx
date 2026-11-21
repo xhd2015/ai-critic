@@ -6,6 +6,7 @@ import { useAddressVisualViewport } from './useAddressVisualViewport';
 import { BrowserBookmarksSheetView } from './BrowserBookmarksSheetView';
 import { BrowserCloseWindowDialog } from './BrowserCloseWindowDialog';
 import { BrowserSweepDialog } from './BrowserSweepDialog';
+import { BrowserMoreMenu } from './BrowserMoreMenu';
 import { BrowserNewTabView } from './BrowserNewTabView';
 import { BrowserSearchResults } from './BrowserSearchResults';
 import { BrowserSearchRow } from './BrowserSearchRow';
@@ -381,17 +382,16 @@ export function BrowserSheet({
                                 >
                                     <span aria-hidden="true">☆</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    className={`bwp-hbtn${helpOpen ? ' is-on' : ''}`}
-                                    onClick={onHelp}
-                                    aria-label="Help — gestures and keys"
-                                    aria-expanded={helpOpen}
-                                    aria-controls="bw-help"
-                                    title="Help — gestures & keys"
-                                >
-                                    <span aria-hidden="true">?</span>
-                                </button>
+                                <BrowserMoreMenu
+                                    surface="sheet"
+                                    status={autoClose}
+                                    rows={rows}
+                                    readOnly={readOnly}
+                                    supported={windowCloseSupported}
+                                    helpOpen={helpOpen}
+                                    onHelp={onHelp}
+                                    onSave={onAutoClose}
+                                />
                                 <button type="button" className="bwp-x" onClick={onClose} aria-label="Close">
                                     ×
                                 </button>
@@ -453,7 +453,6 @@ export function BrowserSheet({
                                 sweepPlanning={sweep.planning}
                                 onSweep={sweep.start}
                                 autoClose={autoClose}
-                                onAutoClose={onAutoClose}
                             />
                             <div className="bwp-panetabs">
                                 <BrowserTabList

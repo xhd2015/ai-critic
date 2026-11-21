@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BrowserDock } from './BrowserDock';
+import { autoCloseRows } from './autoClose';
 import { useAutoCloseToast } from './useAutoCloseToast';
 import { BrowserKeys } from './BrowserKeys';
 import { BrowserRail } from './BrowserRail';
@@ -28,6 +29,7 @@ export interface BrowserDesktopViewProps {
     windowCloseSupported: boolean;
     autoClose: AutoCloseStatus | null;
     onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
+    helpOpen: boolean;
     sessionless: boolean;
     busy: boolean;
     loading: boolean;
@@ -84,7 +86,6 @@ export function BrowserDesktopView(props: BrowserDesktopViewProps) {
                 readOnly={props.readOnly}
                 windowCloseSupported={props.windowCloseSupported}
                 autoClose={props.autoClose}
-                onAutoClose={props.onAutoClose}
                 open={props.railOpen}
                 onSelect={props.onSelectSession}
                 onOpenTab={props.onOpenTab}
@@ -166,9 +167,14 @@ export function BrowserDesktopView(props: BrowserDesktopViewProps) {
                     zoom={props.zoom}
                     readOnly={props.readOnly}
                     keysVisible={props.keysVisible}
+                    autoClose={props.autoClose}
+                    rows={autoCloseRows(props.sessions, props.tabs, props.session)}
+                    supported={props.windowCloseSupported}
+                    helpOpen={props.helpOpen}
                     onLens={props.onLens}
                     onKeys={props.onKeys}
                     onHelp={props.onHelp}
+                    onAutoClose={props.onAutoClose}
                 />
             </div>
         </>

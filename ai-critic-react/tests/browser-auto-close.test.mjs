@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
     AUTO_CLOSE_DEFAULT_SECONDS,
+    AUTO_CLOSE_NEXT_LIMIT,
+    autoCloseRows,
+    dueLabel,
+    nextTen,
+    nextTenCount,
     AUTO_CLOSE_MAX_SECONDS,
     AUTO_CLOSE_MIN_SECONDS,
     autoCloseBlocker,
@@ -123,4 +128,75 @@ test('a custom draft is clamped before it can become a rule', () => {
     assert.equal(customSeconds(2, 'hours'), 7200);
     assert.equal(customSeconds(0, 'minutes'), AUTO_CLOSE_DEFAULT_SECONDS);
     assert.equal(customSeconds(0.01, 'minutes'), AUTO_CLOSE_MIN_SECONDS);
+});
+
+
+test('Next 10 ranks oldest activity first and never exceeds ten', () => {
+    const rows = [
+        { key: 'current', current: true, idle_seconds: 9999 },
+        { key: 'busy', busy: true, idle_seconds: 9999 },
+        { key: 'a', idle_seconds: 60, tabCount: 2 },
+        { key: 'b', idle_seconds: 7200, tabCount: 4 },
+        { key: 'c', idle_seconds: 1800, tabCount: 1 },
+        { key: 'd', idle_seconds: 7200, tabCount: 3 },
+        { key: 'e', idle_seconds: 3000 },
+        { key: 'f', idle_seconds: 2400 },
+        { key: 'g', idle_seconds: 600 },
+        { key: 'h', idle_seconds: 4800 },
+        { key: 'i', idle_seconds: 3600 },
+        { key: 'j', idle_seconds: 1200 },
+        { key: 'k', idle_seconds: 60 },
+    ];
+    const plan = nextTen(rows);
+    assert.equal(plan.length, AUTO_CLOSE_NEXT_LIMIT);
+    // Ties break on key so two renders cannot disagree.
+    assert.deepEqual(
+        plan.map((row) => row.key),
+        ['b', 'd', 'h', 'i', 'e', 'f', 'c', 'j', 'g', 'a'],
+    );
+    assert.ok(plan.every((row) => row.idleSeconds >= plan[plan.length - 1].idleSeconds));
+});
+
+test('Next 10 drops the exempt windows instead of ranking them', () => {
+    const plan = nextTen([
+        { key: 'current', current: true, idle_seconds: 7200 },
+        { key: 'busy', busy: true, idle_seconds: 7200 },
+        { key: 'idle', idle_seconds: 7200, tabCount: 2 },
+    ]);
+    assert.deepEqual(plan.map((row) => row.key), ['idle']);
+});
+
+test('Next 10 copes with fewer windows than the cap, and with none', () => {
+    assert.deepEqual(nextTen([{ key: 'only', idle_seconds: 300 }]).map((row) => row.key), ['only']);
+    assert.deepEqual(nextTen([{ key: 'current', current: true, idle_seconds: 300 }]), []);
+    assert.deepEqual(nextTen([]), []);
+    assert.equal(nextTen([], 0).length, 0);
+});
+
+test('a due label separates "now" from a countdown', () => {
+    assert.deepEqual(dueLabel(3600, 3600), { tone: 'now', text: 'due now' });
+    assert.deepEqual(dueLabel(4200, 3600), { tone: 'now', text: 'due now' });
+    assert.deepEqual(dueLabel(3480, 3600), { tone: 'soon', text: 'in 2m' });
+    assert.deepEqual(dueLabel(3000, 3600), { tone: 'soon', text: 'in 10m' });
+    assert.deepEqual(dueLabel(2400, 3600), { tone: 'later', text: 'in 20m' });
+    assert.deepEqual(dueLabel(0, 3600), { tone: 'later', text: 'in 1h' });
+});
+
+test('the section count explains the cap', () => {
+    assert.equal(nextTenCount(11, 10), '10 of 11 · oldest first');
+    assert.equal(nextTenCount(3, 3), '3 of 3 · oldest first');
+    assert.equal(nextTenCount(0, 0), 'no other windows');
+});
+
+test('sessions become rows with the live tab count for the current window', () => {
+    const rows = autoCloseRows(
+        [
+            { id: 'live', title: 'Docs', idle_seconds: 120, tabs: [{ tab_id: 1 }, { tab_id: 2 }] },
+            { id: 'current', title: '', idle_seconds: 0 },
+        ],
+        [{ tab_id: 9 }, { tab_id: 10 }, { tab_id: 11 }],
+        'current',
+    );
+    assert.deepEqual(rows[0], { key: 'live', title: 'Docs', tabCount: 2, current: false, idle_seconds: 120 });
+    assert.deepEqual(rows[1], { key: 'current', title: 'current', tabCount: 3, current: true, idle_seconds: 0 });
 });

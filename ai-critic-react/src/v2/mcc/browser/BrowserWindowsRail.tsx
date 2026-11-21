@@ -1,5 +1,4 @@
 import type { AutoCloseStatus } from './browserWire';
-import { BrowserAutoCloseEntry } from './BrowserAutoCloseEntry';
 import { idleChipLabel } from './autoClose';
 import { useRevealCurrent } from './useRevealCurrent';
 import { sweepBlocker, sweepWindowCount } from './sweep';
@@ -28,9 +27,8 @@ export interface BrowserWindowsRailProps {
     sweepPlanning: boolean;
     /** The element comes along so the dialog can hand focus back to it. */
     onSweep: (trigger: HTMLButtonElement) => void;
-    /** The idle-window rule, in the sheet's footer above the sweep. */
+    /** The idle-window rule, shown as a chip on each window row. */
     autoClose: AutoCloseStatus | null;
-    onAutoClose: (enabled: boolean, idleSeconds?: number) => Promise<string | null>;
 }
 
 /**
@@ -237,9 +235,6 @@ export function BrowserWindowsRail(props: BrowserWindowsRailProps) {
               window-level action that has no per-window home, and hiding it
               behind the expander would make it undiscoverable on a phone.
             */}
-            <div className="bwp-railautofoot">
-                <BrowserAutoCloseEntry status={props.autoClose} rows={rows} busy={busy} readOnly={readOnly} supported={windowCloseSupported} surface="phone" onSave={props.onAutoClose} />
-            </div>
             <div className="bwp-railfoot">
                 <button
                     type="button"

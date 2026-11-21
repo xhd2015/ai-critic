@@ -238,3 +238,95 @@ export async function fetchWSInstanceVMess(id: string): Promise<{
 }> {
     return jsonResp(await fetch(`/api/ws-proxy/instances/${encodeURIComponent(id)}/vmess-link`));
 }
+
+/* ===== WS Proxy clients (the consuming half) ===== */
+
+export interface WSClientRecord {
+    id: string;
+    name: string;
+    source: 'remote' | 'vmess';
+    base_url: string;
+    instance: string;
+    http_port: number;
+    socks_port: number;
+    auto_start: boolean;
+    pac_domains?: string[];
+    has_token?: boolean;
+}
+
+export interface WSClientStatus {
+    id: string;
+    name: string;
+    source: string;
+    server?: string;
+    instance?: string;
+    http_port: number;
+    socks_port: number;
+    auto_start: boolean;
+    running: boolean;
+    pid?: number;
+    started_at?: string;
+    uptime_secs?: number;
+    last_error?: string;
+    xray_path?: string;
+}
+
+export async function fetchWSClients(): Promise<{ clients: WSClientRecord[]; statuses: WSClientStatus[] }> {
+    const data = await jsonResp(await fetch('/api/ws-proxy/clients'));
+    const payload = data as { clients?: WSClientRecord[]; statuses?: WSClientStatus[] };
+    return { clients: payload.clients ?? [], statuses: payload.statuses ?? [] };
+}
+
+export async function createWSClient(req: {
+    name: string;
+    source: 'remote' | 'vmess';
+    base_url?: string;
+    instance?: string;
+    token?: string;
+    vmess_link?: string;
+    http_port?: number;
+    socks_port?: number;
+    auto_start?: boolean;
+    pac_domains?: string[];
+}): Promise<WSClientRecord> {
+    const data = await jsonResp(await fetch('/api/ws-proxy/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+    }));
+    return (data as { client: WSClientRecord }).client;
+}
+
+export async function updateWSClient(id: string, patch: Partial<WSClientRecord>): Promise<WSClientRecord> {
+    const data = await jsonResp(await fetch(`/api/ws-proxy/clients/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+    }));
+    return (data as { client: WSClientRecord }).client;
+}
+
+export async function deleteWSClient(id: string): Promise<void> {
+    await jsonResp(await fetch(`/api/ws-proxy/clients/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+}
+
+export async function startWSClient(id: string): Promise<WSClientStatus> {
+    const data = await jsonResp(await fetch(`/api/ws-proxy/clients/${encodeURIComponent(id)}/start`, { method: 'POST' }));
+    return (data as { status: WSClientStatus }).status;
+}
+
+export async function stopWSClient(id: string): Promise<void> {
+    await jsonResp(await fetch(`/api/ws-proxy/clients/${encodeURIComponent(id)}/stop`, { method: 'POST' }));
+}
+
+export async function probeWSClient(id: string, url?: string): Promise<{ ok: boolean; error?: string; url?: string }> {
+    const qs = url ? `?url=${encodeURIComponent(url)}` : '';
+    return (await jsonResp(await fetch(`/api/ws-proxy/clients/${encodeURIComponent(id)}/probe${qs}`))) as {
+        ok: boolean; error?: string; url?: string;
+    };
+}
+
+export function wsClientPACURL(id: string, fallback?: string): string {
+    const qs = fallback ? `?fallback=${encodeURIComponent(fallback)}` : '';
+    return `/api/ws-proxy/clients/${encodeURIComponent(id)}/pac${qs}`;
+}

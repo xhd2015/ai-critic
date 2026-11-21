@@ -77,6 +77,7 @@ import (
 	pfcloudflare "github.com/xhd2015/ai-critic/server/proxy/portforward/providers/cloudflare"
 	pflocaltunnel "github.com/xhd2015/ai-critic/server/proxy/portforward/providers/localtunnel"
 	"github.com/xhd2015/ai-critic/server/proxy/proxyconfig"
+	"github.com/xhd2015/ai-critic/server/proxy/wsclient"
 	"github.com/xhd2015/ai-critic/server/proxy/wsproxy"
 	serverqemu "github.com/xhd2015/ai-critic/server/qemu"
 	"github.com/xhd2015/ai-critic/server/quicktest"
@@ -591,6 +592,9 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// WS proxy API (Xray + Cloudflare Tunnel for iPhone access)
 	wsproxy.RegisterAPI(mux)
 	wsproxy.RegisterInstanceAPI(mux)
+	// WS proxy client half: local xray tunnels consumed by this machine.
+	wsclient.RegisterAPI(mux)
+	go wsclient.BootAutoStart()
 
 	// HTTP proxy API (intranet forward proxy with mandatory Basic auth)
 	httpproxy.RegisterAPI(mux)

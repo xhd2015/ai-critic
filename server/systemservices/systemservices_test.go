@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xhd2015/ai-critic/server/proxy/wsclient"
 	"github.com/xhd2015/ai-critic/server/proxy/wsproxy"
 	"github.com/xhd2015/ai-critic/server/services"
 )
@@ -59,12 +60,17 @@ func TestRegisteredSystemServicesAreListedAsSystem(t *testing.T) {
 	}
 }
 
-// useTempWSProxyConfig points ws-proxy at an empty directory for the test.
+// useTempWSProxyConfig points both halves of ws-proxy at an empty directory, so
+// a developer's real clients cannot leak into an assertion about Detail.
 func useTempWSProxyConfig(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	wsproxy.SetTestConfigDir(dir)
-	t.Cleanup(func() { wsproxy.SetTestConfigDir("") })
+	wsclient.SetConfigDir(dir)
+	t.Cleanup(func() {
+		wsproxy.SetTestConfigDir("")
+		wsclient.SetConfigDir("")
+	})
 	return dir
 }
 
@@ -156,5 +162,49 @@ func TestWSProxyConfiguredReportsAutoStartAndStableURL(t *testing.T) {
 	}
 	if reloaded.AutoStart {
 		t.Fatal("AutoStart = true after disabling")
+	}
+}
+
+// TestWSProxyStatusAggregatesClients pins that one card reports both halves of
+// the WS Proxy: the serving instances and the consuming clients.
+func TestWSProxyStatusAggregatesClients(t *testing.T) {
+	dir := t.TempDir()
+	wsclient.SetConfigDir(dir)
+	t.Cleanup(func() { wsclient.SetConfigDir("") })
+
+	if err := wsclient.SaveStore(&wsclient.Store{Clients: []wsclient.Client{
+		{ID: "work-mac", Name: "Work Mac", Source: wsclient.SourceVMess,
+			VMessLink: "vmess://e30=", HTTPPort: 10809, SocksPort: 10808, AutoStart: true},
+	}}); err != nil {
+		t.Fatalf("SaveStore: %v", err)
+	}
+
+	rt := wsProxyController{}.SystemStatus()
+	if !strings.Contains(rt.Detail, "clients") {
+		t.Fatalf("Detail = %q, want the client count folded in", rt.Detail)
+	}
+	if !strings.Contains(rt.Detail, "0/1 clients") {
+		t.Fatalf("Detail = %q, want the client count folded in", rt.Detail)
+	}
+	if !strings.Contains(rt.Detail, "not running") {
+		t.Fatalf("Detail = %q, want the stopped client called out", rt.Detail)
+	}
+	if rt.LogPath == "" {
+		t.Fatal("LogPath must point at the client log so the card can stream it")
+	}
+	if rt.AutoStart == nil || !*rt.AutoStart {
+		t.Fatalf("AutoStart = %v, want true when a client opts in", rt.AutoStart)
+	}
+}
+
+// TestWSProxyStatusWithoutClientsOmitsClientLine keeps a serve-only host clean.
+func TestWSProxyStatusWithoutClientsOmitsClientLine(t *testing.T) {
+	dir := t.TempDir()
+	wsclient.SetConfigDir(dir)
+	t.Cleanup(func() { wsclient.SetConfigDir("") })
+
+	rt := wsProxyController{}.SystemStatus()
+	if strings.Contains(rt.Detail, "clients") {
+		t.Fatalf("Detail = %q, want no client segment when none are configured", rt.Detail)
 	}
 }

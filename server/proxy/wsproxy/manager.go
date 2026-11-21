@@ -1226,3 +1226,13 @@ func AutoStart() {
 		}()
 	})
 }
+
+// EnsureXrayBinary makes the platform xray binary available and returns its
+// path. The WS Proxy client reuses it so client and server never disagree about
+// which xray runs.
+func EnsureXrayBinary() (string, error) {
+	if err := ensureXrayBinary(); err != nil {
+		return "", err
+	}
+	return xrayBinaryPath(), nil
+}

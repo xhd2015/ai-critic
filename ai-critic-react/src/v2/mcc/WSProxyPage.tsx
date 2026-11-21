@@ -7,6 +7,7 @@ import {
     type WSBackendType,
     type WSProxyInstance,
 } from '../../api/proxyServices';
+import { WSProxyClientsSection } from './WSProxyClientsSection';
 import { WSProxyConnectPanel } from './WSProxyConnectPanel';
 import { WSProxyCrumb } from './WSProxyCrumb';
 import { WSProxyInstanceEditor } from './WSProxyInstanceEditor';
@@ -22,7 +23,10 @@ export function WSProxyPage() {
     return <WSProxyList />;
 }
 
+type WSProxyTab = 'server' | 'client';
+
 function WSProxyList() {
+    const [tab, setTab] = useState<WSProxyTab>('server');
     const [instances, setInstances] = useState<WSProxyInstance[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [showAdd, setShowAdd] = useState(false);
@@ -113,10 +117,25 @@ function WSProxyList() {
             <WSProxyCrumb parts={[{ label: 'Services', view: '..' }, { label: 'WS Proxy' }]} />
             <div className="mcc-headerbar">
                 <h2>WS Proxy</h2>
-                <span className={`mcc-pill ${running > 0 ? 'run' : 'stop'}`}>{running}/{instances.length} running</span>
+                <span className={`mcc-pill ${running > 0 ? 'run' : 'stop'}`}>{running}/{instances.length} serving</span>
                 <span className="mcc-spacer" />
-                <button className="mcc-btn mcc-btn-primary" onClick={() => setShowAdd((v) => !v)}>+ Add Instance</button>
+                {tab === 'server' && (
+                    <button className="mcc-btn mcc-btn-primary" onClick={() => setShowAdd((v) => !v)}>+ Add Instance</button>
+                )}
             </div>
+
+            <div className="mcc-ws-tabs">
+                <button className={`mcc-ws-tab ${tab === 'server' ? 'active' : ''}`} onClick={() => setTab('server')}>
+                    Server<span className="mcc-ws-tab-count">{instances.length}</span>
+                </button>
+                <button className={`mcc-ws-tab ${tab === 'client' ? 'active' : ''}`} onClick={() => setTab('client')}>
+                    Client
+                </button>
+            </div>
+
+            {tab === 'client' && <WSProxyClientsSection />}
+
+            {tab === 'server' && <>
             <div className="mcc-sub">
                 Xray VMess + WebSocket over Cloudflare Tunnel。每实例 = 独立域名 + UUID + 后端出口(self 直连本机内网,或 HTTP proxy 指向本机/远端端口)。
             </div>
@@ -188,6 +207,7 @@ function WSProxyList() {
             {!instances.length && !error && (
                 <div className="mcc-ports-empty">No instances yet — add one above.</div>
             )}
+            </>}
         </div>
     );
 }
@@ -241,7 +261,7 @@ function AddInstanceForm({ onDone }: { onDone: (created: WSProxyInstance | null)
                     <input
                         className="mcc-input"
                         style={{ marginTop: 6 }}
-                        placeholder="http://127.0.0.1:23456 或 http://10.53.64.69:23456"
+                        placeholder="http://127.0.0.1:23456 或 http://proxy.internal:23456"
                         value={backendURL}
                         onChange={(e) => setBackendURL(e.target.value)}
                         onClick={(e) => { e.stopPropagation(); setBackendType('proxy'); }}

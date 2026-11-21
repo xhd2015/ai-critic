@@ -2891,3 +2891,34 @@ a.mcc-tunnel-mapping-hostname:hover {
     .mcc-connect { grid-template-columns: 1fr; }
     .mcc-inst-actions { width: 100%; justify-content: flex-end; }
 }
+
+/* WS Proxy page tabs: Server (serving instances) / Client (consumed tunnels). */
+.mcc-ws-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--mcc-border, #2a2f3d);
+    margin: 4px 0 14px;
+}
+.mcc-ws-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--mcc-dim, #8b93a7);
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: -1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mcc-ws-tab.active {
+    color: #60a5fa;
+    border-bottom-color: #60a5fa;
+}
+.mcc-ws-tab-count {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(139, 147, 167, 0.15);
+}

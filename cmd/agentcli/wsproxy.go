@@ -54,6 +54,11 @@ Subcommands:
       Diagnose server and client proxy health. Default fetch test uses
       https://www.google.com through the VMess path.
 
+  client <subcommand>
+      Manage the client half (local xray consuming a remote instance):
+      list | add | remove | start | stop | status | pac.
+      Use "remote-agent ws-proxy client -h" for details.
+
   sing-box client-config [--output FILE]
       Generate sing-box TUN config from VMess params.
 
@@ -74,7 +79,13 @@ Examples:
   remote-agent ws-proxy status
   remote-agent ws-proxy config set --upstream-proxy http://squid.internal:3128
   remote-agent ws-proxy vmess-link
+  remote-agent ws-proxy client list
+  remote-agent ws-proxy client add --name fyde-mac --server https://mac.example.com --instance ws-a --token-stdin
+  remote-agent ws-proxy client start --name fyde-mac
   remote-agent ws-proxy doctor
+  remote-agent ws-proxy client list
+  remote-agent ws-proxy client add --name fyde-mac --server https://mac.example.com --instance ws-a --token-stdin
+  remote-agent ws-proxy client start --name fyde-mac
   remote-agent ws-proxy doctor --try-url https://example.com
   remote-agent ws-proxy sing-box client-config
   remote-agent ws-proxy sing-box run-tun --detach
@@ -117,6 +128,8 @@ func runWSProxy(getClient func() (*client.Client, error), args []string) error {
 		return wsproxyInstancesStartStop(getClient, rest, "start")
 	case "istop":
 		return wsproxyInstancesStartStop(getClient, rest, "stop")
+	case "client":
+		return runWSProxyClient(getClient, rest)
 	case "doctor":
 		return wsproxyDoctor(getClient, rest)
 	case "sing-box":

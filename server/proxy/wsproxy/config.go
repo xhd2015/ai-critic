@@ -125,3 +125,7 @@ func defaultConfig() *Config {
 		Subdomain:  defaultSubdomain,
 	}
 }
+
+// XrayDir is the directory holding the shared xray binary and per-instance
+// configs. Exported so the WS Proxy client half reuses one binary.
+func XrayDir() string { return xrayDir() }

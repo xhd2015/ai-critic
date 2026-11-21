@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AutoCloseStatus } from './browserWire';
+import type { AutoCloseRow } from './autoClose';
+import { BrowserNextTen } from './BrowserNextTen';
 import {
     AUTO_CLOSE_MAX_SECONDS,
     AUTO_CLOSE_MIN_SECONDS,
@@ -16,6 +18,8 @@ import {
 
 export interface BrowserAutoCloseDialogProps {
     status: AutoCloseStatus | null;
+    /** Live windows for the Next 10 preview; the daemon re-checks on each tick. */
+    rows: AutoCloseRow[];
     /** 'rail' is the desktop modal; 'phone' is the bottom sheet. */
     surface: 'rail' | 'phone';
     readOnly: boolean;
@@ -34,14 +38,6 @@ function ClockGlyph() {
     );
 }
 
-function CheckGlyph() {
-    return (
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="m3.5 8.4 3 3 6-6.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
-
 function initialDraft(seconds: number): { preset: number | 'custom'; value: string; unit: 'minutes' | 'hours' } {
     const preset = presetOf(seconds);
     if (preset !== 'custom') return { preset, value: '30', unit: 'minutes' };
@@ -55,7 +51,7 @@ function initialDraft(seconds: number): { preset: number | 'custom'; value: stri
  * a local value, and only Save reaches the daemon.
  */
 export function BrowserAutoCloseDialog(props: BrowserAutoCloseDialogProps) {
-    const { status, surface, readOnly, supported, onClose } = props;
+    const { status, rows, surface, readOnly, supported, onClose } = props;
     const initial = initialDraft(status?.idle_seconds ?? 3600);
     const [enabled, setEnabled] = useState(Boolean(status?.enabled));
     const [preset, setPreset] = useState<number | 'custom'>(initial.preset);
@@ -126,13 +122,13 @@ export function BrowserAutoCloseDialog(props: BrowserAutoCloseDialogProps) {
                         <button
                             type="button"
                             role="switch"
-                            className={`bwp-switch${enabled ? ' on' : ''}`}
+                            className={`bwp-switch${enabled ? ' is-on' : ''}`}
                             aria-checked={enabled}
                             aria-label="Auto-close idle windows"
                             disabled={blocked || saving}
                             onClick={() => setEnabled((was) => !was)}
                         >
-                            <i />
+                            <span />
                         </button>
                     </div>
 
@@ -192,11 +188,16 @@ export function BrowserAutoCloseDialog(props: BrowserAutoCloseDialogProps) {
                         </p>
                     </section>
 
-                    <div className="bwp-acexempt">
-                        <span><CheckGlyph />This window</span>
-                        <span><CheckGlyph />Running a job</span>
-                        <span><CheckGlyph />Chrome's last window</span>
-                    </div>
+                    <section className="bwp-acsec">
+                        <div className="bwp-acsechead">
+                            <span className="kicker">NEXT 10</span>
+                            <span className="bwp-acsecnote">oldest activity first</span>
+                        </div>
+                        <BrowserNextTen rows={rows} thresholdSeconds={threshold} enabled={enabled} />
+                        <p className="bwp-acskip">
+                            Never closed: this window, Chrome's last window, any window running an agent job.
+                        </p>
+                    </section>
 
                     <section className="bwp-aclog">
                         <div className="bwp-acsechead">

@@ -12,10 +12,92 @@ export const AUTO_CLOSE_MIN_SECONDS = 300;
 export const AUTO_CLOSE_MAX_SECONDS = 86400;
 export const AUTO_CLOSE_RECORD_LIMIT = 10;
 
-/** The two fields every rail row already has; both surfaces share the wording. */
+/**
+ * The fields both rails already have. The menu, the Next 10 list and the
+ * per-row chips all read this one shape, so a window cannot be "closing now" in
+ * the rail and absent from the plan.
+ */
 export interface AutoCloseRow {
+    key?: string;
+    title?: string;
+    tabCount?: number;
+    current?: boolean;
+    /** A browser-agent job is in flight in this window. */
+    busy?: boolean;
+    idle_seconds?: number;
+}
+
+/**
+ * Sessions as the menu and the Next 10 list need them. A live window is one row;
+ * the current one is marked so both surfaces can exempt it in one place.
+ */
+export function autoCloseRows(
+    sessions: AutoCloseStatusSession[],
+    currentTabs: { length: number },
+    current: string,
+): AutoCloseRow[] {
+    return sessions.map((session) => ({
+        key: session.id,
+        title: session.title?.trim() || session.id,
+        tabCount: session.id === current ? currentTabs.length : session.tabs?.length ?? 0,
+        current: session.id === current,
+        idle_seconds: session.idle_seconds ?? 0,
+    }));
+}
+
+/** The two fields autoCloseRows reads; kept narrow so tests need no full row. */
+export interface AutoCloseStatusSession {
+    id: string;
+    title?: string;
     current?: boolean;
     idle_seconds?: number;
+    tabs?: { tab_id: number }[];
+}
+
+/** One row of the Next 10 plan, already ranked. */
+export interface NextClose {
+    key: string;
+    title: string;
+    tabs: number;
+    idleSeconds: number;
+}
+
+/** How many windows the modal previews; the daemon closes one tick at a time. */
+export const AUTO_CLOSE_NEXT_LIMIT = 10;
+
+/**
+ * The windows the rule will close next, in the order it will close them:
+ * least recently used first. Exempt windows are dropped before ranking, so the
+ * list can never promise a close that the daemon refuses.
+ */
+export function nextTen(rows: AutoCloseRow[], limit = AUTO_CLOSE_NEXT_LIMIT): NextClose[] {
+    const ranked = rows
+        .filter((row) => !row.current && !row.busy)
+        .map((row) => ({
+            key: row.key ?? row.title ?? '',
+            title: row.title?.trim() || row.key || 'Chrome window',
+            tabs: row.tabCount ?? 0,
+            idleSeconds: Math.max(0, row.idle_seconds ?? 0),
+        }))
+        .sort((a, b) =>
+            b.idleSeconds !== a.idleSeconds ? b.idleSeconds - a.idleSeconds : a.key.localeCompare(b.key),
+        );
+    return ranked.slice(0, Math.max(0, limit));
+}
+
+/** "due now", "in 2m", "in 45m" — the Next 10 row's right-hand label. */
+export function dueLabel(idleSeconds: number, thresholdSeconds: number): { tone: 'now' | 'soon' | 'later'; text: string } {
+    if (idleSeconds >= thresholdSeconds) return { tone: 'now', text: 'due now' };
+    const left = thresholdSeconds - idleSeconds;
+    return left <= 600
+        ? { tone: 'soon', text: `in ${Math.ceil(left / 60)}m` }
+        : { tone: 'later', text: `in ${idleShort(left)}` };
+}
+
+/** "10 of 11 · oldest first" — the Next 10 section's own count. */
+export function nextTenCount(total: number, shown: number): string {
+    if (total === 0) return 'no other windows';
+    return `${shown} of ${total} · oldest first`;
 }
 
 /** The presets the dialog offers before "Custom". In minutes. */
