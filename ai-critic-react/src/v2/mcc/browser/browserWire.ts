@@ -187,6 +187,20 @@ export interface BrowserStatus {
     error?: string;
 }
 
+/** What the Mac clipboard holds, as /api/browser/clipboard reports it. */
+export interface ClipboardPeek {
+    kind: 'empty' | 'text' | 'rich' | 'image' | 'files';
+    flavors?: string[];
+    bytes?: number;
+    text?: string;
+    html?: string;
+    truncated?: boolean;
+    image?: { mime: string; width?: number; height?: number; bytes: number };
+    files?: { name: string; path: string; size?: number }[];
+    copy_flavor?: string;
+    note?: string;
+}
+
 /** The driven tab's navigation position, as /api/browser/status reports it. */
 export interface HistoryStatus {
     index: number;

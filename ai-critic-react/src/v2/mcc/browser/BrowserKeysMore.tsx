@@ -44,6 +44,9 @@ export interface BrowserKeysMoreProps {
     onPaste: (text: string) => void;
     onContextMenu: () => void;
     onCollapse: () => void;
+    /** Open the Mac-clipboard preview; the paste button itself stays unchanged. */
+    onPeek: () => void;
+    peekOpen: boolean;
 }
 
 /**
@@ -62,6 +65,8 @@ export function BrowserKeysMore({
     onPaste,
     onContextMenu,
     onCollapse,
+    onPeek,
+    peekOpen,
 }: BrowserKeysMoreProps) {
     const [pasteDraft, setPasteDraft] = useState('');
     const latchedSet = new Set(latched);
@@ -107,9 +112,27 @@ export function BrowserKeysMore({
                 <button type="button" className="bw-key bw-keyact" data-keys="copy" onClick={onCopy}>
                     ⧉ Copy
                 </button>
-                <button type="button" className="bw-key bw-keyact" data-keys="paste" onClick={() => onPaste(pasteDraft)}>
-                    ⎘ Paste
-                </button>
+                <span className="bw-keysplit">
+                    <button
+                        type="button"
+                        className="bw-key bw-keyact"
+                        data-keys="paste"
+                        onClick={() => onPaste(pasteDraft)}
+                    >
+                        ⎘ Paste
+                    </button>
+                    <button
+                        type="button"
+                        className={`bw-key bw-keypeek${peekOpen ? ' is-on' : ''}`}
+                        data-keys="peek"
+                        onClick={onPeek}
+                        aria-expanded={peekOpen}
+                        title="Preview the Mac clipboard"
+                        aria-label="Preview the Mac clipboard"
+                    >
+                        ⌄
+                    </button>
+                </span>
                 <button type="button" className="bw-key bw-keyact" data-keys="menu" onClick={onContextMenu}>
                     ☰ Menu
                 </button>

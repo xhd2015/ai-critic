@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mac 粘贴板预览 + 复制到 iPhone · mockup</title>
+<style>
+  :root {
+    --bg: #05070a; --card: #111a2e; --elev: #1b2740; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 26px 20px 90px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; padding-left: 4px; border-left: 3px solid #3b82f6; padding-top: 2px; padding-bottom: 2px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 1000px; line-height: 1.55; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 22px; line-height: 1.75; }
+  .assump code, .lead code, .spec code, p code, .caption code, td code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+  .assump b.ok { color: #86efac; } .assump b.warn { color: #fde68a; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
+  .col { width: 400px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 10px; }
+  .col-h h3 { margin: 0; font-size: 13px; }
+  .tag { font-size: 9.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.t { color: #bfdbfe; background: rgba(96,165,250,.16); border: 1px solid rgba(96,165,250,.42); }
+  .tag.r { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+  .tag.i { color: #fde68a; background: rgba(251,191,36,.14); border: 1px solid rgba(251,191,36,.4); }
+  .tag.f { color: #ddd6fe; background: rgba(167,139,250,.16); border: 1px solid rgba(167,139,250,.45); }
+
+  .phone { width: 372px; height: 800px; background: var(--bg); border-radius: 34px; border: 8px solid #020617;
+    overflow: hidden; display: flex; flex-direction: column; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 10px; line-height: 1.6; max-width: 372px; }
+  .caption b { color: #cbd5e1; }
+
+  /* host chrome */
+  .host { display: flex; align-items: center; gap: 8px; padding: 9px 11px 7px; background: #0b1220; flex-shrink: 0; }
+  .host .lbl { font-size: 10.5px; color: var(--mut); font-family: var(--mono); }
+  .host .pill { flex: 1; background: #111a2e; border-radius: 999px; padding: 5px 10px; font-size: 10.5px; color: #93c5fd; text-align: center; }
+  .stage { flex: 1; position: relative; min-height: 0; background-color: #05070a;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; }
+
+  /* top + nav (already shipped) */
+  .bwp-top { position: absolute; top: 7px; left: 8px; right: 8px; height: 46px; display: flex; align-items: center; gap: 2px;
+    padding: 0 6px 0 4px; background: rgba(10,14,20,.78); border: 1px solid rgba(255,255,255,.075); border-radius: 13px; z-index: 30; }
+  .ico { width: 28px; height: 30px; display: grid; place-items: center; border: 0; background: none; color: #aab6c6; }
+  .ttl { flex: 1; min-width: 0; text-align: left; }
+  .ttl .s { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); flex: none; }
+  .ttl .u { display: block; font-size: 10px; color: var(--mut); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .bwp-nav { position: absolute; top: 60px; left: 8px; right: 8px; display: flex; align-items: center; justify-content: space-between; z-index: 29; }
+  .navgrp { display: flex; align-items: center; gap: 5px; }
+  .navbtn { width: 36px; height: 31px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.1);
+    border-radius: 9px; background: rgba(10,14,20,.78); color: #dbe4ef; }
+  .navnote { font-size: 10.5px; color: #8c98a8; font-variant-numeric: tabular-nums; }
+  .dismiss { width: 36px; height: 31px; display: grid; place-items: center; border: 1px solid rgba(248,113,113,.4);
+    border-radius: 9px; background: rgba(60,20,24,.7); color: #f8a8a8; }
+
+  /* keyboard tray */
+  .tray { position: absolute; left: 8px; right: 8px; bottom: 66px; z-index: 32; }
+  .kbd { background: #111a2e; border: 1px solid #334155; border-radius: 13px; padding: 8px; box-shadow: 0 18px 44px -16px rgba(0,0,0,.8); }
+  .kbd-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .key { min-width: 38px; height: 31px; padding: 0 8px; border-radius: 8px; border: 1px solid #334155; background: #1b2740;
+    color: #e2e8f0; font-size: 10.5px; font-family: var(--mono); display: grid; place-items: center; }
+  .key.act { background: #1e2f4d; border-color: #3f5a86; color: #bfdbfe; font-family: var(--font); font-weight: 650; }
+  .kbd-sep { display: flex; align-items: center; gap: 7px; margin: 8px 0 6px; font-size: 8.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--mut); font-weight: 700; }
+  .kbd-sep::after { content: ""; flex: 1; height: 1px; background: #26334a; }
+
+  /* ---- the new preview panel ---- */
+  .peek { background: #0d1526; border: 1px solid #2b3d5c; border-radius: 12px; margin-top: 2px; overflow: hidden; }
+  .peek-h { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #1e2c44; }
+  .peek-h .k { font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #93c5fd; }
+  .peek-h .sz { font-size: 10px; color: var(--mut); font-family: var(--mono); margin-left: auto; }
+  .flavors { display: flex; gap: 4px; padding: 6px 10px 0; flex-wrap: wrap; }
+  .fl { font-size: 9px; font-family: var(--mono); padding: 2px 6px; border-radius: 5px; border: 1px solid #334155; color: #94a3b8; }
+  .fl.on { border-color: rgba(96,165,250,.55); background: rgba(96,165,250,.14); color: #bfdbfe; }
+  .peek-b { padding: 8px 10px; }
+  .txt { font-size: 11.5px; line-height: 1.55; color: #dbe4ef; white-space: pre-wrap; word-break: break-word;
+    max-height: 92px; overflow: hidden; font-family: var(--mono); }
+  .txt.rich { font-family: var(--font); }
+  .fade { position: relative; }
+  .fade::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+    background: linear-gradient(transparent, #0d1526); }
+  .richbox { background: #fff; color: #0f172a; border-radius: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.5;
+    max-height: 96px; overflow: hidden; font-family: var(--font); }
+  .richbox h1 { font-size: 15px; margin: 0 0 4px; padding: 0; border: 0; color: #c00; }
+  .richbox p { margin: 0; color: #334155; }
+  .thumb { width: 100%; height: 96px; border-radius: 8px; overflow: hidden; position: relative;
+    background: linear-gradient(135deg, #1e3a8a, #0f766e); display: grid; place-items: center; }
+  .thumb .cap { font-size: 10px; color: rgba(255,255,255,.85); font-family: var(--mono); }
+  .files { display: flex; flex-direction: column; gap: 4px; }
+  .file { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #dbe4ef; }
+  .file i { width: 14px; height: 12px; border-radius: 2px; background: #2f4d80; flex: none; }
+  .file span { font-family: var(--mono); font-size: 10px; color: var(--mut); margin-left: auto; }
+  .peek-f { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #1e2c44; background: #0b1220; }
+  .btn { flex: 1; height: 32px; border-radius: 8px; font-size: 11px; font-weight: 700; font-family: var(--font);
+    display: grid; place-items: center; border: 1px solid #334155; background: #1b2740; color: #dbe4ef; }
+  .btn.primary { background: #2563eb; border-color: #3b82f6; color: #fff; }
+  .btn.ghost { flex: 0 0 auto; padding: 0 10px; color: #94a3b8; }
+  .note { font-size: 9.5px; color: var(--mut); padding: 0 10px 8px; line-height: 1.5; }
+  .note b { color: #cbd5e1; }
+
+  .pop { position: absolute; z-index: 40; font-size: 9px; font-weight: 700; padding: 3px 6px; border-radius: 5px;
+    background: rgba(59,130,246,.94); color: #fff; white-space: nowrap; }
+  .pop.ok { background: rgba(34,197,94,.94); }
+  .pop.warn { background: rgba(239,68,68,.94); }
+
+  /* bottom bar */
+  .bwp-bottom { position: absolute; bottom: 8px; left: 8px; right: 8px; height: 48px; display: flex; align-items: center;
+    gap: 6px; padding: 0 6px; background: rgba(10,14,20,.78); border: 1px solid rgba(255,255,255,.075); border-radius: 14px; z-index: 31; }
+  .seg { display: flex; background: #111a2e; border: 1px solid #334155; border-radius: 9px; padding: 2px; }
+  .seg b { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; padding: 6px 9px; border-radius: 7px; color: var(--mut); }
+  .seg b.on { background: #334155; color: #f1f5f9; }
+  .zoom { margin-left: auto; align-items: center; }
+  .zoom b { font-size: 11px; letter-spacing: 0; }
+  .zoom .pct { font-family: var(--mono); font-size: 10px; color: var(--sec); }
+  .kb { width: 32px; height: 28px; border: 1px solid #334155; background: #111a2e; color: var(--sec); border-radius: 8px;
+    display: grid; place-items: center; margin-left: 4px; }
+
+  /* ---- iPhone paste result ---- */
+  .iphone { width: 340px; height: 700px; background: #fff; border-radius: 40px; border: 9px solid #0b0f14;
+    overflow: hidden; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,.5); display: flex; flex-direction: column; }
+  .ip-status { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+    font-size: 10px; font-weight: 700; color: #0b0f14; background: #fff; flex-shrink: 0; }
+  .ip-url { padding: 5px 14px; font-size: 10px; color: #64748b; text-align: center; background: #f1f5f9; flex-shrink: 0;
+    font-family: var(--mono); }
+  .ip-body { flex: 1; overflow: hidden; padding: 14px; background: #fff; color: #0f172a; }
+  .ip-toolbar { flex-shrink: 0; height: 40px; display: flex; align-items: center; justify-content: space-around;
+    border-top: 1px solid #e2e8f0; background: #f8fafc; font-size: 14px; color: #64748b; }
+  .ip-h { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+  .ip-note { font-size: 8px; color: #94a3b8; position: absolute; right: 10px; top: 44px; }
+
+  /* the pasted rich content inside Safari (contenteditable look) */
+  .pasted { border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; }
+  .pasted h1 { font-size: 17px; margin: 0 0 6px; color: #c00; font-weight: 700; }
+  .pasted p { margin: 0; font-size: 12px; color: #334155; line-height: 1.6; }
+  .pasted-plain { font-size: 12px; color: #334155; line-height: 1.6; white-space: pre-wrap; font-family: var(--mono); }
+  .pasted-img { width: 100%; border-radius: 6px; display: block; }
+  .caret { display: inline-block; width: 1px; height: 13px; background: #2563eb; vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0 } }
+  .ip-badge { position: absolute; left: 10px; top: 42px; font-size: 8.5px; font-weight: 700; color: #15803d;
+    background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.4); padding: 2px 6px; border-radius: 5px; }
+
+  .spec { margin-top: 40px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 16px 18px; max-width: 1240px; }
+  .spec h3 { margin: 0 0 10px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; line-height: 1.55; }
+  th { color: var(--sec); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; }
+  tr:last-child td { border-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mac 粘贴板：预览 + 复制到 iPhone</h1>
+  <p class="lead">
+    粘贴键旁加一个 <b>Peek</b>，展开后读取 <b>Mac 上</b>的粘贴板：显示数据类型、内容预览、以及「复制到 iPhone」和「粘贴进页面」两个动作。
+    下面按数据类型分组（纯文本 / 富文本 / 图片 / 文件），每组右侧是<b>在 iPhone Safari 里粘贴后的实际样子</b>。
+  </p>
+
+  <div class="assump">
+    <b>已实测（macOS 26 / 本机）：</b><br />
+    <b class="ok">✓</b> 枚举类型：<code>osascript -e 'clipboard info'</code> → 纯文本返回
+    <code>«class utf8», 15, «class ut16», 32, string, 15, Unicode text</code>；
+    图片返回 <code>«class PNGf», 93763, «class JPEG», 79017, «class TIFF», 4227614, GIF, BMP, …</code>。<br />
+    <b class="ok">✓</b> 读富文本：<code>get the clipboard as «class HTML»</code> →
+    <code>«data HTML3C6831…»</code>（hex 编码，剥掉 <code>«data HTML</code> 前缀即可解码）；<code>«class RTF »</code> 同法。<br />
+    <b class="ok">✓</b> 纯文本可直接 <code>pbpaste</code>；RTF 可用 <code>textutil -convert html</code> 转成 HTML 作退路。<br />
+    <b class="warn">⚠</b> 同一份内容常有多个 flavor（一张图同时有 9 种编码）。所以「类型」不是一个值，而是<b>一个内容 + 一组可用格式</b>。<br />
+    <b class="warn">⚠</b> iPhone Safari 的 <code>navigator.clipboard.write()</code> 必须在<b>用户手势</b>内发起：
+    预览展开时就预取字节，点「复制」时不再 await，否则 Safari 会以 "not allowed" 拒绝。
+  </div>
+
+  <h2>一 · 折叠态与展开态</h2>
+  <div class="frames">
+
+    <!-- A: collapsed -->
+    <div class="col">
+      <div class="col-h"><h3>A · 折叠（现状 + Peek 入口）</h3><span class="tag t">默认</span></div>
+      <div class="phone">
+        <div class="host"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <span class="ico">‹</span>
+            <span class="ttl"><span class="s"><i class="dot"></i>Messages tab</span><span class="u">http://127.0.0.1:3080/?session=…</span></span>
+            <span class="ico" style="color:#93c5fd">✎</span>
+          </div>
+          <div class="bwp-nav">
+            <div class="navgrp"><span class="navbtn">‹</span><span class="navbtn">›</span><span class="navnote">1 / 2</span></div>
+            <span class="dismiss">✕</span>
+          </div>
+
+          <div class="tray">
+            <div class="kbd">
+              <div class="kbd-sep">Actions</div>
+              <div class="kbd-row">
+                <span class="key act">⧉ Copy</span>
+                <span class="key act" style="border-color:rgba(96,165,250,.6);background:rgba(96,165,250,.16);color:#bfdbfe">⎘ Paste</span>
+                <span class="key act">☰ Menu</span>
+                <span class="key act">⤢ Select all</span>
+              </div>
+              <div class="note" style="padding:6px 0 0">
+                <b>Paste</b> 右侧的小 <b>⌄</b> 就是 Peek；直接点 Paste 仍是「把手机剪贴板文本贴进页面」，行为不变。
+              </div>
+            </div>
+          </div>
+
+          <div class="pop" style="left:150px; top:352px;">新：⌄ Peek</div>
+
+          <div class="bwp-bottom">
+            <div class="seg"><b>VIEW</b><b class="on">CTRL</b></div>
+            <div class="seg zoom"><b>−</b><b class="pct">100%</b><b>+</b></div>
+            <span class="kb">⌨</span>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        默认不读粘贴板 —— <b>只在展开 Peek 的那一刻读一次</b>，不做轮询。粘贴板里可能有密码，不能让它随页面加载被动上传。
+      </p>
+    </div>
+
+    <!-- B: plain text -->
+    <div class="col">
+      <div class="col-h"><h3>B · 展开：纯文本</h3><span class="tag t">text/plain</span></div>
+      <div class="phone">
+        <div class="host"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <span class="ico">‹</span>
+            <span class="ttl"><span class="s"><i class="dot"></i>Messages tab</span><span class="u">http://127.0.0.1:3080/?session=…</span></span>
+            <span class="ico" style="color:#93c5fd">✎</span>
+          </div>
+          <div class="bwp-nav">
+            <div class="navgrp"><span class="navbtn">‹</span><span class="navbtn">›</span><span class="navnote">1 / 2</span></div>
+            <span class="dismiss">✕</span>
+          </div>
+
+          <div class="tray">
+            <div class="kbd">
+              <div class="peek">
+                <div class="peek-h">
+                  <span class="k">Mac clipboard</span>
+                  <span class="sz">412 chars · text</span>
+                </div>
+                <div class="flavors"><span class="fl on">utf8</span><span class="fl on">ut16</span><span class="fl">string</span></div>
+                <div class="peek-b">
+                  <div class="fade">
+                    <div class="txt">git rebase -i HEAD~3
+
+# pick 2f1c9ab  feat: nav row
+# squash 8d3e771  fix: spacing
+# reword 4a90c12  feat: keyboard
+
+npm run test:browser</div>
+                  </div>
+                </div>
+                <div class="peek-f">
+                  <span class="btn primary">⧉ Copy to iPhone</span>
+                  <span class="btn">⎘ Paste into page</span>
+                  <span class="btn ghost">↻</span>
+                </div>
+                <div class="note">读取自 Mac · <b>仅在你展开时读取一次</b></div>
+              </div>
+              <div class="kbd-sep">Modifiers</div>
+              <div class="kbd-row" style="opacity:.5">
+                <span class="key">Ctrl</span><span class="key">Alt</span><span class="key">⌘</span><span class="key">⇧</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="seg"><b>VIEW</b><b class="on">CTRL</b></div>
+            <div class="seg zoom"><b>−</b><b class="pct">100%</b><b>+</b></div>
+            <span class="kb">⌨</span>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        mono 等宽显示、保留换行。缩略 92px 后渐隐，点预览区可展开全文。
+        flavor 行告诉你底层是哪些 UTIs —— <code>utf8</code> 高亮表示复制到 iPhone 时用它。
+      </p>
+    </div>
+
+    <!-- C: rich -->
+    <div class="col">
+      <div class="col-h"><h3>C · 展开：富文本</h3><span class="tag r">text/html</span></div>
+      <div class="phone">
+        <div class="host"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <span class="ico">‹</span>
+            <span class="ttl"><span class="s"><i class="dot"></i>Messages tab</span><span class="u">http://127.0.0.1:3080/?session=…</span></span>
+            <span class="ico" style="color:#93c5fd">✎</span>
+          </div>
+          <div class="bwp-nav">
+            <div class="navgrp"><span class="navbtn">‹</span><span class="navbtn">›</span><span class="navnote">1 / 2</span></div>
+            <span class="dismiss">✕</span>
+          </div>
+
+          <div class="tray">
+            <div class="kbd">
+              <div class="peek">
+                <div class="peek-h">
+                  <span class="k">Mac clipboard</span>
+                  <span class="sz">1.2 KB · rich text</span>
+                </div>
+                <div class="flavors"><span class="fl on">html</span><span class="fl on">rtf</span><span class="fl on">utf8</span></div>
+                <div class="peek-b">
+                  <div class="richbox">
+                    <h1>Quarterly plan</h1>
+                    <p>Ship <b>preview</b> &amp; <i>copy</i>. 保留标题颜色、粗体、斜体。</p>
+                  </div>
+                </div>
+                <div class="peek-f">
+                  <span class="btn primary">⧉ Copy to iPhone</span>
+                  <span class="btn">⎘ Paste into page</span>
+                  <span class="btn ghost">↻</span>
+                </div>
+                <div class="note">同时写入 <b>text/html + text/plain</b>：支持富文本的目标保留格式，纯文本目标自动降级</div>
+              </div>
+              <div class="kbd-sep">Shortcuts</div>
+              <div class="kbd-row" style="opacity:.45">
+                <span class="key">Ctrl-A</span><span class="key">Ctrl-C</span><span class="key">⌘-V</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="seg"><b>VIEW</b><b class="on">CTRL</b></div>
+            <div class="seg zoom"><b>−</b><b class="pct">100%</b><b>+</b></div>
+            <span class="kb">⌨</span>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        富文本用白底盒子渲染（页面可能是深色，直接铺原文会看不清）。三个 flavor 都有：html 优先、rtf 可转、text 兜底。
+      </p>
+    </div>
+
+  </div>
+
+  <h2>二 · 图片与文件</h2>
+  <div class="frames">
+
+    <div class="col">
+      <div class="col-h"><h3>D · 展开：图片</h3><span class="tag i">image/png</span></div>
+      <div class="phone">
+        <div class="host"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <span class="ico">‹</span>
+            <span class="ttl"><span class="s"><i class="dot"></i>Messages tab</span><span class="u">http://127.0.0.1:3080/?session=…</span></span>
+            <span class="ico" style="color:#93c5fd">✎</span>
+          </div>
+          <div class="bwp-nav">
+            <div class="navgrp"><span class="navbtn">‹</span><span class="navbtn">›</span><span class="navnote">1 / 2</span></div>
+            <span class="dismiss">✕</span>
+          </div>
+
+          <div class="tray">
+            <div class="kbd">
+              <div class="peek">
+                <div class="peek-h">
+                  <span class="k">Mac clipboard</span>
+                  <span class="sz">2918×1688 · 92 KB</span>
+                </div>
+                <div class="flavors">
+                  <span class="fl on">png</span><span class="fl">jpeg</span><span class="fl">tiff</span><span class="fl">gif</span><span class="fl">bmp</span>
+                </div>
+                <div class="peek-b">
+                  <div class="thumb"><span class="cap">screenshot · 2918×1688</span></div>
+                </div>
+                <div class="peek-f">
+                  <span class="btn primary">⧉ Copy to iPhone</span>
+                  <span class="btn ghost">⤓ Save</span>
+                </div>
+                <div class="note">优先 PNG（无损）；Safari 拒绝图片剪贴板时降级为「长按 → 存储到照片」</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pop ok" style="left:186px; top:396px;">9 种编码，取最合适的</div>
+
+          <div class="bwp-bottom">
+            <div class="seg"><b>VIEW</b><b class="on">CTRL</b></div>
+            <div class="seg zoom"><b>−</b><b class="pct">100%</b><b>+</b></div>
+            <span class="kb">⌨</span>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        flavor 行直接反映实测结果：macOS 会为一张图同时提供 png/jpeg/tiff/gif/bmp 等编码。
+        预览用<b>缩略图</b>（服务端压到 480px），完整字节只在点复制时取。
+      </p>
+    </div>
+
+    <div class="col">
+      <div class="col-h"><h3>E · 展开：文件列表</h3><span class="tag f">file URLs</span></div>
+      <div class="phone">
+        <div class="host"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <span class="ico">‹</span>
+            <span class="ttl"><span class="s"><i class="dot"></i>Messages tab</span><span class="u">http://127.0.0.1:3080/?session=…</span></span>
+            <span class="ico" style="color:#93c5fd">✎</span>
+          </div>
+          <div class="bwp-nav">
+            <div class="navgrp"><span class="navbtn">‹</span><span class="navbtn">›</span><span class="navnote">1 / 2</span></div>
+            <span class="dismiss">✕</span>
+          </div>
+
+          <div class="tray">
+            <div class="kbd">
+              <div class="peek">
+                <div class="peek-h">
+                  <span class="k">Mac clipboard</span>
+                  <span class="sz">3 files · 2.4 MB</span>
+                </div>
+                <div class="flavors"><span class="fl on">furl</span><span class="fl">utf8</span></div>
+                <div class="peek-b">
+                  <div class="files">
+                    <div class="file"><i></i>report.pdf <span>1.8 MB</span></div>
+                    <div class="file"><i></i>plan.xlsx <span>412 KB</span></div>
+                    <div class="file"><i></i>notes.md <span>3 KB</span></div>
+                  </div>
+                </div>
+                <div class="peek-f">
+                  <span class="btn primary">⧉ Copy paths</span>
+                  <span class="btn">⤓ Download</span>
+                </div>
+                <div class="note">iPhone 不能直接接文件剪贴板 → 复制<b>路径列表</b>，或点 Download 走系统下载</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="seg"><b>VIEW</b><b class="on">CTRL</b></div>
+            <div class="seg zoom"><b>−</b><b class="pct">100%</b><b>+</b></div>
+            <span class="kb">⌨</span>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        从 Finder 复制文件时粘贴板里是 <code>«class furl»</code>。iPhone 的剪贴板没有「文件」概念，
+        所以这里诚实地降级成<b>路径文本 + 下载</b>，而不是假装能 1:1。
+      </p>
+    </div>
+  </div>
+
+  <h2>三 · 在 iPhone Safari 里粘贴后的效果</h2>
+  <p class="lead" style="margin-bottom:18px">
+    同一个「Copy to iPhone」，落到不同目标上结果不同 —— 这是 <code>ClipboardItem</code> 同时写入多种 flavor 的意义：
+    Notes / 富文本编辑器拿到 html，纯文本输入框拿到 plain。
+  </p>
+  <div class="frames">
+
+    <div class="col" style="width:360px">
+      <div class="col-h"><h3>F · 富文本 → Safari 可编辑区</h3><span class="tag r">保留格式</span></div>
+      <div class="iphone">
+        <div class="ip-status"><span>22:17</span><span>▮▮▮ ⌁</span></div>
+        <div class="ip-url">127.0.0.1:23712/browser</div>
+        <div class="ip-badge">⌘V 已粘贴</div>
+        <div class="ip-body">
+          <div class="ip-h">Message</div>
+          <div class="pasted">
+            <h1>Quarterly plan</h1>
+            <p>Ship <b>preview</b> &amp; <i>copy</i>. 保留标题颜色、粗体、斜体。<span class="caret"></span></p>
+          </div>
+          <div style="font-size:9px;color:#64748b;margin-top:10px;line-height:1.6">
+            标题仍是红色 h1、<b>preview</b> 仍是粗体、<i>copy</i> 仍是斜体 —— 与 Mac 上一致。
+          </div>
+        </div>
+        <div class="ip-toolbar"><span>‹</span><span>›</span><span>⤴</span><span>▤</span><span>⧉</span></div>
+      </div>
+      <p class="caption">粘贴进 contenteditable / Notes 时，Safari 取 <code>text/html</code>，格式 1:1 还原。</p>
+    </div>
+
+    <div class="col" style="width:360px">
+      <div class="col-h"><h3>G · 富文本 → 纯文本输入框</h3><span class="tag t">自动降级</span></div>
+      <div class="iphone">
+        <div class="ip-status"><span>22:17</span><span>▮▮▮ ⌁</span></div>
+        <div class="ip-url">127.0.0.1:23712/browser</div>
+        <div class="ip-badge">⌘V 已粘贴</div>
+        <div class="ip-body">
+          <div class="ip-h">Search</div>
+          <div style="border:1px solid #cbd5e1;border-radius:8px;padding:9px 10px;font-size:11.5px;color:#334155">
+            Quarterly plan Ship preview &amp; copy. 保留标题颜色、粗体、斜体。<span class="caret"></span>
+          </div>
+          <div style="font-size:9px;color:#64748b;margin-top:10px;line-height:1.6">
+            同一个 ClipboardItem 的 <code>text/plain</code> 被取用：标签被剥掉，文字完整。
+          </div>
+        </div>
+        <div class="ip-toolbar"><span>‹</span><span>›</span><span>⤴</span><span>▤</span><span>⧉</span></div>
+      </div>
+      <p class="caption">目标不支持富文本时不会粘成空 —— 因为 plain 是随 html 一起写进去的。</p>
+    </div>
+
+    <div class="col" style="width:360px">
+      <div class="col-h"><h3>H · 图片 → 照片 / 编辑区</h3><span class="tag i">image/png</span></div>
+      <div class="iphone">
+        <div class="ip-status"><span>22:17</span><span>▮▮▮ ⌁</span></div>
+        <div class="ip-url">127.0.0.1:23712/browser</div>
+        <div class="ip-badge">⌘V 已粘贴</div>
+        <div class="ip-body">
+          <div class="ip-h">Message</div>
+          <div class="pasted">
+            <div style="height:120px;border-radius:6px;background:linear-gradient(135deg,#1e3a8a,#0f766e);display:grid;place-items:center;color:rgba(255,255,255,.85);font-size:9px;font-family:monospace">
+              screenshot · 2918×1688
+            </div>
+            <p style="margin-top:8px">图片作为附件贴入 <span class="caret"></span></p>
+          </div>
+        </div>
+        <div class="ip-toolbar"><span>‹</span><span>›</span><span>⤴</span><span>▤</span><span>⧉</span></div>
+      </div>
+      <p class="caption">
+        <b>要留意的兼容性</b>：iOS Safari 对 <code>ClipboardItem</code> 里的 <code>image/png</code> 支持随版本变化。
+        被拒时面板会退到「长按图片 → 存储到照片 / 拷贝」，而不是静默失败。
+      </p>
+    </div>
+  </div>
+
+  <div class="spec">
+    <h3>契约变化</h3>
+    <table>
+      <thead><tr><th style="width:26%">层</th><th style="width:34%">现在</th><th>之后</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>GET /api/browser/clipboard</code></td>
+          <td>不存在</td>
+          <td>新增。返回 <code>{kind, bytes, flavors[], text?, html?, image?{w,h,mime,thumb}}</code>。<b>只读一次、不缓存到磁盘</b></td>
+        </tr>
+        <tr>
+          <td><code>GET /api/browser/clipboard/raw</code></td>
+          <td>不存在</td>
+          <td>新增。<code>?flavor=png|jpeg|html|rtf|text</code> 返回完整字节，供「复制到 iPhone」与「下载」</td>
+        </tr>
+        <tr>
+          <td><code>server/browser/clipboard.go</code></td>
+          <td>只有 <code>pasteText</code>（用客户端传来的文本）</td>
+          <td>新增 <code>readSystemClipboard()</code>：<code>clipboard info</code> 枚举 → 按优先级 <code>pbpaste</code> / <code>«class HTML»</code> / <code>«class RTF »</code> / <code>«class PNGf»</code> 取值 → hex 解码</td>
+        </tr>
+        <tr>
+          <td><code>ClientMessage</code>（ws）</td>
+          <td>copy / paste / shortcut / tab_close …</td>
+          <td>新增 <code>clipboard_peek</code>（展开时请求）与 <code>clipboard_paste</code>（取某个 flavor 贴进页面）</td>
+        </tr>
+        <tr>
+          <td><code>BrowserKeysMore.tsx</code></td>
+          <td>Paste 是一个按钮 + 一个文本框</td>
+          <td>Paste 拆成「直接粘贴」+「⌄ Peek」；新增 <code>BrowserClipboardPeek.tsx</code> 面板与 <code>useClipboardPeek.ts</code></td>
+        </tr>
+        <tr>
+          <td>本地复制（前端）</td>
+          <td>无</td>
+          <td><code>navigator.clipboard.write([ClipboardItem])</code>；失败时降级 <code>textarea + execCommand('copy')</code>（纯文本）或长按提示（图片）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">类型优先级与还原策略</h3>
+    <table>
+      <thead><tr><th style="width:16%">内容</th><th style="width:26%">识别依据</th><th style="width:26%">复制到 iPhone 写入</th><th>1:1 还原程度</th></tr></thead>
+      <tbody>
+        <tr><td>富文本</td><td><code>«class HTML»</code> 或 <code>«class RTF »</code></td><td><code>text/html</code> + <code>text/plain</code>（RTF 先 <code>textutil</code> 转 HTML）</td><td><b>完整</b>：Safari 保留标签与内联样式</td></tr>
+        <tr><td>纯文本</td><td>仅 <code>utf8</code>/<code>string</code></td><td><code>text/plain</code></td><td><b>完整</b>：换行与空格保留</td></tr>
+        <tr><td>图片</td><td><code>«class PNGf»</code>/<code>JPEG</code>/<code>TIFF</code></td><td><code>image/png</code>（若无 PNG 则转 PNG）</td><td><b>按版本</b>：Safari 16.4+ 支持写图片；否则降级长按保存</td></tr>
+        <tr><td>文件</td><td><code>«class furl»</code></td><td><code>text/plain</code>（路径列表）</td><td><b>降级</b>：iPhone 剪贴板无文件概念</td></tr>
+        <tr><td>表格</td><td>HTML 里的 <code>&lt;table&gt;</code></td><td><code>text/html</code> + <code>text/plain</code>（TSV）</td><td><b>完整</b>：粘进 Notes 保留表格；纯文本目标拿 TSV</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">测试场景</h3>
+    <table>
+      <thead><tr><th style="width:48%">场景</th><th>期望</th></tr></thead>
+      <tbody>
+        <tr><td>粘贴板为空时展开 Peek</td><td>显示 "Mac clipboard is empty"，两个按钮置灰</td></tr>
+        <tr><td>复制一段中文+换行</td><td>预览保留换行；粘到 iPhone 后一字不差</td></tr>
+        <tr><td>从浏览器复制带样式的段落</td><td>flavor 显示 html+utf8；粘进 contenteditable 保留格式</td></tr>
+        <tr><td>同内容粘进单行 input</td><td>降级为纯文本，不出现标签</td></tr>
+        <tr><td>复制一张截图</td><td>预览是缩略图；Copy to iPhone 得到图片而非文字</td></tr>
+        <tr><td>Safari 拒绝 image/png</td><td>面板提示改为长按保存，不静默失败</td></tr>
+        <tr><td>Finder 复制 3 个文件</td><td>列出文件名与大小；按钮变 "Copy paths"</td></tr>
+        <tr><td>复制 2MB HTML</td><td>预览只传缩略文本，完整字节按需取，不卡面板</td></tr>
+        <tr><td>WSS 断线时展开</td><td>提示需要连接，不显示上一次的旧内容</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">怎么测</h3>
+    <table>
+      <thead><tr><th style="width:48%">命令 / 步骤</th><th>覆盖</th></tr></thead>
+      <tbody>
+        <tr><td><code>go test ./server/browser/ -run Clipboard</code></td><td>类型解析优先级、hex 解码、空粘贴板、文件列表、HTML→plain 兜底</td></tr>
+        <tr><td><code>npm run test:browser</code></td><td>Peek 展开/收起、按钮禁用条件、flavor 选择、降级分支</td></tr>
+        <tr><td>真机：Mac 上 <code>pbcopy</code> 后点 Peek</td><td>预览与粘贴板一致</td></tr>
+        <tr><td>真机：iPhone Safari 里长按粘贴</td><td>富文本/纯文本/图片三种结果的 1:1 还原</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

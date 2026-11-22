@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { BrowserKeysMore } from './BrowserKeysMore';
 import type { ModifierName } from './BrowserKeysMore';
 
@@ -32,6 +33,11 @@ interface BrowserKeysProps {
     onCopy: () => void;
     onPaste: (text: string) => void;
     onContextMenu: () => void;
+    /** Mac-clipboard preview, opened from the small ⌄ beside Paste. */
+    onPeek: () => void;
+    peekOpen: boolean;
+    /** The preview panel itself, rendered under the second page. */
+    peekPanel?: ReactNode;
 }
 
 /**
@@ -52,6 +58,9 @@ export function BrowserKeys({
     onCopy,
     onPaste,
     onContextMenu,
+    onPeek,
+    peekOpen,
+    peekPanel,
 }: BrowserKeysProps) {
     const [draft, setDraft] = useState('');
     const [more, setMore] = useState(false);
@@ -136,8 +145,11 @@ export function BrowserKeys({
                     onPaste={onPaste}
                     onContextMenu={onContextMenu}
                     onCollapse={() => setMore(false)}
+                    onPeek={onPeek}
+                    peekOpen={peekOpen}
                 />
             )}
+            {more && peekOpen && peekPanel}
         </div>
     );
 }

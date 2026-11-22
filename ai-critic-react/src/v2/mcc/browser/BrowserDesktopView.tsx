@@ -73,6 +73,9 @@ export interface BrowserDesktopViewProps {
     onCopy: () => void;
     onPaste: (text: string) => void;
     onContextMenu: () => void;
+    onPeek: () => void;
+    peekOpen: boolean;
+    peekPanel?: ReactNode;
     onLens: (lens: Lens) => void;
     onKeys: () => void;
     onHelp: () => void;
@@ -172,6 +175,9 @@ export function BrowserDesktopView(props: BrowserDesktopViewProps) {
                     onCopy={props.onCopy}
                     onPaste={props.onPaste}
                     onContextMenu={props.onContextMenu}
+                    onPeek={props.onPeek}
+                    peekOpen={props.peekOpen}
+                    peekPanel={props.peekPanel}
                 />
                 <BrowserDock
                     lens={props.lens}

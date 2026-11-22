@@ -20,6 +20,8 @@ func RegisterAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/browser/ensure", m.handleEnsure)
 	mux.HandleFunc("/api/browser/navigate", m.handleNavigate)
 	mux.HandleFunc("/api/browser/history", m.handleHistory)
+	mux.HandleFunc("/api/browser/clipboard", m.handleClipboardPeek)
+	mux.HandleFunc("/api/browser/clipboard/raw", m.handleClipboardRaw)
 	mux.HandleFunc("/api/browser/preset", m.handlePreset)
 	mux.HandleFunc("/api/browser/mode", m.handleMode)
 	mux.HandleFunc("/api/browser/refresh", m.handleRefresh)

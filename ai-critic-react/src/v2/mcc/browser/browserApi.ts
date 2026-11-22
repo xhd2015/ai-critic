@@ -2,6 +2,7 @@ import type {
     AttachWindowResponse,
     AutoCloseStatus,
     BrowserStatus,
+    ClipboardPeek,
     CloseWindowResponse,
     SessionsResponse,
     SweepWindowsResponse,
@@ -54,6 +55,16 @@ export function startBrowser(): Promise<BrowserStatus> {
 /** Makes `id` the one session every viewer shows, reopening its window if needed. */
 export function switchSession(id: string): Promise<BrowserStatus> {
     return post('/api/browser/session', { session_id: id }).then((response) => json<BrowserStatus>(response));
+}
+
+/** Read the Mac clipboard once; never cached, never polled. */
+export function peekClipboard(): Promise<ClipboardPeek> {
+    return fetch('/api/browser/clipboard').then((response) => json<ClipboardPeek>(response));
+}
+
+/** One representation's bytes, for writing to the phone clipboard. */
+export function fetchClipboardFlavor(flavor: string): Promise<Response> {
+    return fetch(`/api/browser/clipboard/raw?flavor=${encodeURIComponent(flavor)}`);
 }
 
 /** Step the driven tab one entry back or forward through its own history. */

@@ -464,6 +464,249 @@
     border-color: #388bfd;
 }
 
+/* Paste split: the button keeps its meaning, the caret opens the preview. */
+.bw-keysplit {
+    display: inline-flex;
+    flex: none;
+}
+
+.bw-keysplit .bw-key {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.bw-keypeek {
+    min-width: 26px;
+    padding: 0 5px;
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    font-family: inherit;
+    font-size: 12px;
+    color: #a7c5ff;
+}
+
+.bw-keypeek.is-on {
+    background: #1b2c46;
+    border-color: #3f5a86;
+    color: #cfe0ff;
+}
+
+/* ---- Mac clipboard preview ---- */
+.bwp-peek {
+    margin-top: 8px;
+    border: 1px solid #2b3d5c;
+    border-radius: 10px;
+    background: #0d1526;
+    overflow: hidden;
+}
+
+.bwp-peek-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 9px;
+    border-bottom: 1px solid #1e2c44;
+}
+
+.bwp-peek-k {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #93c5fd;
+}
+
+.bwp-peek-kind {
+    font-size: 9px;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    padding: 1px 5px;
+}
+
+.bwp-peek-sz {
+    margin-left: auto;
+    font-size: 9.5px;
+    color: #64748b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-peek-x {
+    border: 0;
+    background: none;
+    color: #64748b;
+    font-size: 12px;
+    padding: 0 2px;
+    cursor: pointer;
+}
+
+.bwp-peek-flavors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 9px 0;
+}
+
+.bwp-peek-fl {
+    font-size: 8.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid #334155;
+    color: #94a3b8;
+}
+
+.bwp-peek-fl.is-on {
+    border-color: rgba(96, 165, 250, 0.55);
+    background: rgba(96, 165, 250, 0.14);
+    color: #bfdbfe;
+}
+
+.bwp-peek-body {
+    padding: 7px 9px;
+}
+
+.bwp-peek-dim {
+    margin: 0;
+    font-size: 9.5px;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+.bwp-peek-err {
+    margin: 0;
+    font-size: 9.5px;
+    line-height: 1.5;
+    color: #f8a8a8;
+}
+
+.bwp-peek-text {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: none;
+    color: #dbe4ef;
+    font-size: 10.5px;
+    line-height: 1.5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 76px;
+    overflow: hidden;
+    padding: 0;
+    cursor: pointer;
+}
+
+.bwp-peek-text.is-tall {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+/* The clipboard's HTML belongs to another app: a sandboxed frame keeps its
+   styles and scripts away from this page. */
+.bwp-peek-rich {
+    width: 100%;
+    height: 86px;
+    border: 1px solid #2b3d5c;
+    border-radius: 7px;
+    background: #fff;
+}
+
+.bwp-peek-rich.is-tall {
+    height: 260px;
+}
+
+.bwp-peek-img {
+    height: 78px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #1e3a8a, #0f766e);
+    display: grid;
+    place-items: center;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bwp-peek-files {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.bwp-peek-files li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: #dbe4ef;
+    min-width: 0;
+}
+
+.bwp-peek-files i {
+    width: 11px;
+    height: 10px;
+    border-radius: 2px;
+    background: #2f4d80;
+    flex: none;
+}
+
+.bwp-peek-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bwp-peek-fsz {
+    margin-left: auto;
+    font-size: 9px;
+    color: #64748b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    flex: none;
+}
+
+.bwp-peek-f {
+    display: flex;
+    gap: 5px;
+    padding: 7px 9px;
+    border-top: 1px solid #1e2c44;
+    background: #0b1220;
+}
+
+.bwp-peek-btn {
+    flex: 1;
+    min-height: 30px;
+    border-radius: 7px;
+    border: 1px solid #334155;
+    background: #1b2740;
+    color: #dbe4ef;
+    font-size: 10px;
+    font-weight: 650;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.bwp-peek-btn.is-primary {
+    background: #2563eb;
+    border-color: #3b82f6;
+    color: #fff;
+}
+
+.bwp-peek-btn.is-ghost {
+    flex: 0 0 auto;
+    padding: 0 9px;
+    color: #94a3b8;
+}
+
+.bwp-peek-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 .bwp-keysmore-hint {
     margin: 8px 0 0;
     font-size: 11px;

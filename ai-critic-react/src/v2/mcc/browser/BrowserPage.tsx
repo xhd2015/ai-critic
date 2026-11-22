@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { navigateTarget, stepHistory as stepHistoryRequest } from './browserApi';
+import { BrowserClipboardPeek } from './BrowserClipboardPeek';
+import { useClipboardPeek } from './useClipboardPeek';
 import { useBrowserStream } from './useBrowserStream';
 import { useBrowserSessions } from './useBrowserSessions';
 import { useBrowserZoom } from './useBrowserZoom';
@@ -87,6 +89,7 @@ export default function BrowserPage() {
     // CTRL wants to click the page, and a keyboard sliding up over the picture
     // covers exactly what they were about to tap.
     const [keysVisible, setKeysVisible] = useState(false);
+    const clipboard = useClipboardPeek();
 
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -327,6 +330,34 @@ export default function BrowserPage() {
 
     const openContextMenu = () => send({ type: 'context_menu', x: 0.5, y: 0.5 });
 
+    const pasteIntoPageFromClipboard = () => {
+        const peek = clipboard.peek;
+        if (!peek) return;
+        // The page takes text: hand it the clipboard's plain half, not its HTML.
+        const text = peek.text ?? '';
+        if (!text) {
+            showToast('This clipboard has no text to paste into the page.', true);
+            return;
+        }
+        send({ type: 'paste', text });
+        showToast('Pasted into the page.');
+    };
+
+    const peekPanel = (
+        <BrowserClipboardPeek
+            peek={clipboard.peek}
+            loading={clipboard.loading}
+            error={clipboard.error}
+            copyState={clipboard.copyState}
+            copyError={clipboard.copyError}
+            onRefresh={clipboard.refresh}
+            onCopyToPhone={clipboard.copyToPhone}
+            onPasteIntoPage={pasteIntoPageFromClipboard}
+            onDownload={clipboard.download}
+            onClose={clipboard.close}
+        />
+    );
+
     const pickTab = (tabId: number) => {
         setSheet('closed');
         void activateTab(tabId);
@@ -475,6 +506,9 @@ export default function BrowserPage() {
                         onCopy={copySelection}
                         onPaste={pasteText}
                         onContextMenu={openContextMenu}
+                        onPeek={clipboard.toggle}
+                        peekOpen={clipboard.open}
+                        peekPanel={peekPanel}
                     >
                         {stage}
                     </BrowserPhoneView>
@@ -538,6 +572,9 @@ export default function BrowserPage() {
                     onCopy={copySelection}
                     onPaste={pasteText}
                     onContextMenu={openContextMenu}
+                    onPeek={clipboard.toggle}
+                    peekOpen={clipboard.open}
+                    peekPanel={peekPanel}
                     onLens={setLens}
                     onKeys={() => setKeysVisible((was) => !was)}
                     onHelp={() => setHelpOpen(true)}
