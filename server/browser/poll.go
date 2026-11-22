@@ -27,9 +27,8 @@ func (m *Manager) handleFrame(w http.ResponseWriter, r *http.Request) {
 		}
 		after = uint32(parsed)
 	}
-	// Watching the mirror is using this window: it must never idle out from
-	// under the person scrolling it.
-	m.touchCurrentWindow()
+	// Watching the mirror is not interaction: polling frames must not keep the
+	// window alive, or a page left open in a tab would idle forever.
 	// First touch may find capture stopped: start it so the poll has a frame
 	// to hand out instead of 304ing forever on a stale cache.
 	m.hub.touchPoll()

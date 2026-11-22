@@ -97,8 +97,10 @@ type autoCloseCandidate struct {
 }
 
 // observeWindows folds one extension listing into the activity ledger. A window
-// is active when Chrome says it is focused; a window seen for the first time is
-// active now. Windows that disappeared are dropped together with their history.
+// seen for the first time is active now; after that only real interaction (input
+// through the mirror) resets the clock. Focus deliberately does not count: a
+// window left in front would otherwise idle forever. Windows that disappeared are
+// dropped together with their history.
 func (m *Manager) observeWindows(payload *windowsPayload) {
 	if payload == nil {
 		return
@@ -121,9 +123,6 @@ func (m *Manager) observeWindows(payload *windowsPayload) {
 		if activity == nil {
 			activity = &windowActivity{lastActiveAt: now}
 			m.autoActive[win.WindowID] = activity
-		}
-		if win.Focused {
-			activity.lastActiveAt = now
 		}
 		activity.title, _ = windowLabel(win)
 		activity.tabs = len(win.Tabs)
@@ -302,9 +301,6 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 		return nil, nil
 	}
 	defer m.attachMu.Unlock()
-	if m.jobsInFlight() > 0 {
-		return nil, nil
-	}
 
 	rows, err := m.d.sessions(ctx)
 	if err != nil {
@@ -332,20 +328,6 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 			return nil, nil
 		}
 	}
-	keep := map[int64]bool{}
-	if cur := m.windowIDValue(); cur != 0 {
-		keep[cur] = true
-	}
-	if win := payload.windowForSession(m.sessionIDValue()); win != nil {
-		keep[win.WindowID] = true
-	}
-	// The anchor's own window carries the transport the close job travels on.
-	if anchor != "" {
-		if win := payload.windowForSession(anchor); win != nil {
-			keep[win.WindowID] = true
-		}
-	}
-
 	m.autoMu.Lock()
 	active := make(map[int64]*windowActivity, len(m.autoActive))
 	for id, activity := range m.autoActive {
@@ -354,11 +336,13 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 	m.autoMu.Unlock()
 
 	threshold := time.Duration(cfg.IdleSeconds) * time.Second
-	candidates := idleCandidates(payload, active, keep, threshold, now)
+	candidates := idleCandidates(payload, active, threshold, now)
 
+	current := m.windowIDValue()
+	droppedCurrent := false
 	var closed []AutoCloseRecord
 	for _, candidate := range candidates {
-		if win := payload.windowByID(candidate.win.WindowID); win == nil || win.Focused {
+		if payload.windowByID(candidate.win.WindowID) == nil {
 			continue
 		}
 		if err := m.closeWindowJob(ctx, anchor, candidate.win.WindowID); err != nil {
@@ -367,35 +351,52 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 			continue
 		}
 		closed = append(closed, m.recordAutoClose(candidate, now))
+		if candidate.win.WindowID == current {
+			droppedCurrent = true
+		}
+	}
+	if droppedCurrent {
+		m.forgetClosedCurrentWindow()
 	}
 	return closed, nil
 }
 
-// idleCandidates is the pure part of the tick: which windows are due, oldest
-// first, never the last drivable window, never a kept or focused one.
+// forgetClosedCurrentWindow drops the mirror state after the rule closed the
+// window ai-critic was driving. It deliberately does not reopen anything: the
+// rule just decided that window was idle, so reopening it would undo the close
+// and start a close/reopen loop. The next passive poll picks a surviving window
+// if one exists.
+func (m *Manager) forgetClosedCurrentWindow() {
+	m.mu.Lock()
+	m.connected = false
+	m.windowID = 0
+	m.contentTabID = 0
+	m.activeTabID = 0
+	m.tabs = nil
+	m.url = ""
+	m.presetApplied = false
+	m.mu.Unlock()
+	if m.hub != nil {
+		m.hub.kick()
+	}
+}
+
+// idleCandidates is the pure part of the tick: every window past the interval,
+// oldest first. There are no exemptions — not the focused window, not the one
+// ai-critic is driving, not the last window left. Idle means idle.
 func idleCandidates(
 	payload *windowsPayload,
 	active map[int64]*windowActivity,
-	keep map[int64]bool,
 	threshold time.Duration,
 	now time.Time,
 ) []autoCloseCandidate {
 	if payload == nil {
 		return nil
 	}
-	drivable := 0
-	for i := range payload.Windows {
-		if drivableWindow(&payload.Windows[i]) {
-			drivable++
-		}
-	}
-	if drivable <= 1 {
-		return nil
-	}
-	candidates := make([]autoCloseCandidate, 0, drivable)
+	candidates := make([]autoCloseCandidate, 0, len(payload.Windows))
 	for i := range payload.Windows {
 		win := &payload.Windows[i]
-		if !drivableWindow(win) || win.WindowID == 0 || win.Focused || keep[win.WindowID] {
+		if !drivableWindow(win) || win.WindowID == 0 {
 			continue
 		}
 		activity := active[win.WindowID]
@@ -414,10 +415,6 @@ func idleCandidates(
 		}
 		return candidates[i].win.WindowID < candidates[j].win.WindowID
 	})
-	// Closing all but the last window would quit Chrome; stop one short.
-	if len(candidates) >= drivable {
-		candidates = candidates[:drivable-1]
-	}
 	return candidates
 }
 

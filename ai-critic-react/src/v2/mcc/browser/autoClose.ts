@@ -67,12 +67,11 @@ export const AUTO_CLOSE_NEXT_LIMIT = 10;
 
 /**
  * The windows the rule will close next, in the order it will close them:
- * least recently used first. Exempt windows are dropped before ranking, so the
- * list can never promise a close that the daemon refuses.
+ * least recently used first. There are no exemptions, so every window is ranked
+ * — including the one being viewed and the last one left.
  */
 export function nextTen(rows: AutoCloseRow[], limit = AUTO_CLOSE_NEXT_LIMIT): NextClose[] {
     const ranked = rows
-        .filter((row) => !row.current && !row.busy)
         .map((row) => ({
             key: row.key ?? row.title ?? '',
             title: row.title?.trim() || row.key || 'Chrome window',
@@ -145,7 +144,6 @@ export function secondsOfPreset(minutes: number): number {
 
 /** A rail chip for one window, or '' when the window needs no explanation. */
 export function idleChipLabel(row: AutoCloseRow, thresholdSeconds: number, enabled: boolean): string {
-    if (row.current) return 'in use';
     const idle = row.idle_seconds ?? 0;
     if (!idle) return '';
     if (!enabled) return `idle ${idleShort(idle)}`;
@@ -162,7 +160,6 @@ export function nextCloseLabel(rows: AutoCloseRow[], thresholdSeconds: number, e
     if (!enabled) return 'windows stay open';
     let highest = 0;
     for (const row of rows) {
-        if (row.current) continue;
         highest = Math.max(highest, row.idle_seconds ?? 0);
     }
     if (!highest) return 'watching';

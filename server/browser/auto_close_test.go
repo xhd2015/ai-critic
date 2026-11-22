@@ -74,15 +74,20 @@ func TestAutoCloseTickClosesOnlyWindowsPastTheInterval(t *testing.T) {
 	}
 }
 
-func TestAutoCloseTickKeepsFocusedAndCurrentWindows(t *testing.T) {
+// No exemptions: the focused window and the window ai-critic is driving are
+// closed like any other once they pass the interval.
+func TestAutoCloseClosesFocusedAndCurrentWindows(t *testing.T) {
 	payload := autoClosePayload(
-		// The current window is stale too: it must still survive.
-		sweepWindow(900, false, []string{"s1"}, sweepTab(901, sweepSessionURL+"s1")),
-		// Focused beats idle: a window in use is never closed.
+		// 900 is the window ai-critic drives and the focused one at that.
+		sweepWindow(900, true, []string{"s1"}, sweepTab(901, sweepSessionURL+"s1")),
 		sweepWindow(910, true, []string{"s2"}, sweepTab(911, "https://docs.example/")),
 		sweepWindow(920, false, nil, sweepTab(921, "https://search.example/")),
 	)
 	m, now := autoCloseManager(t, autoCloseFake(sweepRows(), payload))
+	m.mu.Lock()
+	m.sessionID = "s1"
+	m.windowID = 900
+	m.mu.Unlock()
 	m.autoActive[900] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
 	m.autoActive[910] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
 	m.autoActive[920] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
@@ -91,8 +96,22 @@ func TestAutoCloseTickKeepsFocusedAndCurrentWindows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AutoCloseTick: %v", err)
 	}
-	if len(closed) != 1 || closed[0].WindowID != 920 {
-		t.Fatalf("closed = %+v, want only 920", closed)
+	if len(closed) != 3 {
+		t.Fatalf("closed = %+v, want all three windows", closed)
+	}
+	got := map[int64]bool{}
+	for _, rec := range closed {
+		got[rec.WindowID] = true
+	}
+	for _, want := range []int64{900, 910, 920} {
+		if !got[want] {
+			t.Fatalf("window %d not closed: %+v", want, closed)
+		}
+	}
+	// The manager must stop claiming a window it just closed.
+	if m.windowIDValue() != 0 || m.Snapshot().Session.Connected {
+		t.Fatalf("manager still points at the closed window: id=%d connected=%v",
+			m.windowIDValue(), m.Snapshot().Session.Connected)
 	}
 }
 
@@ -116,7 +135,10 @@ func TestAutoCloseTickDoesNothingWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestAutoCloseNeverClosesTheLastWindow(t *testing.T) {
+// The last window is closed too: Chrome quits with it, and the next explicit
+// action reopens one. Keeping it alive was the exemption that made a stale idle
+// window immortal.
+func TestAutoCloseClosesTheLastWindow(t *testing.T) {
 	payload := autoClosePayload(sweepWindow(910, false, nil))
 	m, _ := autoCloseManager(t, autoCloseFake(sweepRows(), payload))
 	m.autoActive = map[int64]*windowActivity{
@@ -126,23 +148,8 @@ func TestAutoCloseNeverClosesTheLastWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AutoCloseTick: %v", err)
 	}
-	if len(closed) != 0 {
-		t.Fatalf("closed = %+v, want none", closed)
-	}
-
-	// Two windows: one close is allowed, but the last drivable one stays.
-	payload = autoClosePayload(
-		sweepWindow(900, true, []string{"s1"}),
-		sweepWindow(910, false, []string{"s2"}),
-	)
-	m, now := autoCloseManager(t, autoCloseFake(sweepRows(), payload))
-	m.autoActive[910] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
-	closed, err = m.AutoCloseTick(context.Background())
-	if err != nil {
-		t.Fatalf("AutoCloseTick: %v", err)
-	}
 	if len(closed) != 1 || closed[0].WindowID != 910 {
-		t.Fatalf("closed = %+v, want 910", closed)
+		t.Fatalf("closed = %+v, want the only window 910", closed)
 	}
 }
 
@@ -154,12 +161,17 @@ func TestIdleCandidatesRespectsThresholdBoundary(t *testing.T) {
 		sweepWindow(920, false, nil),
 	)
 	active := map[int64]*windowActivity{
+		900: {lastActiveAt: now.Add(-2 * time.Hour)},
 		910: {lastActiveAt: now.Add(-time.Hour)},
 		920: {lastActiveAt: now.Add(-time.Hour + time.Second)},
 	}
-	got := idleCandidates(payload, active, map[int64]bool{900: true}, time.Hour, now)
-	if len(got) != 1 || got[0].win.WindowID != 910 {
-		t.Fatalf("candidates = %+v, want 910 at the exact boundary", got)
+	got := idleCandidates(payload, active, time.Hour, now)
+	if len(got) != 2 {
+		t.Fatalf("candidates = %+v, want 900 and 910 (the exact boundary is due)", got)
+	}
+	// Oldest first: 900 before 910; 920 is one second short and stays.
+	if got[0].win.WindowID != 900 || got[1].win.WindowID != 910 {
+		t.Fatalf("candidates = %+v, want [900 910]", got)
 	}
 }
 
@@ -225,7 +237,9 @@ func TestAutoCloseConfigNormalizesCorruptValues(t *testing.T) {
 	}
 }
 
-func TestObserveWindowsSeedsAndTracksFocus(t *testing.T) {
+// Focus is not activity: a window left in front ages exactly like any other, so
+// the rule can retire it. Only real input through the mirror resets a clock.
+func TestObserveWindowsSeedsAndAgesEveryWindow(t *testing.T) {
 	m := newTestManager(t, &fakeClient{})
 	now := autoCloseNow()
 	m.autoNow = func() time.Time { return now }
@@ -242,15 +256,21 @@ func TestObserveWindowsSeedsAndTracksFocus(t *testing.T) {
 		t.Fatalf("new window idle = %d, want 0", got)
 	}
 
-	// Focus is sampled, so a later tick ages the window that was not focused.
+	// A later tick ages both windows, focused or not.
 	later := now.Add(2 * time.Hour)
 	m.autoNow = func() time.Time { return later }
 	m.observeWindows(payload)
-	if got := m.idleSecondsFor(900, later); got != 0 {
-		t.Fatalf("still-focused idle = %d, want 0", got)
+	if got := m.idleSecondsFor(900, later); got != 7200 {
+		t.Fatalf("focused idle = %d, want 7200 (focus is not activity)", got)
 	}
 	if got := m.idleSecondsFor(910, later); got != 7200 {
 		t.Fatalf("idle = %d, want 7200", got)
+	}
+
+	// Input through the mirror is what resets a clock.
+	m.touchWindow(900)
+	if got := m.idleSecondsFor(900, later); got != 0 {
+		t.Fatalf("touched idle = %d, want 0", got)
 	}
 
 	// A vanished window drops out of the ledger entirely.
@@ -277,12 +297,16 @@ func TestAutoCloseIgnoresPassiveCapture(t *testing.T) {
 	}
 }
 
-func TestAutoCloseSkipsWhenAJobIsInFlight(t *testing.T) {
+// An in-flight job is not an exemption either: the window still goes when it is
+// past the interval. Only the tick's own concurrency lock may skip a pass.
+func TestAutoCloseClosesWhileAJobIsInFlight(t *testing.T) {
 	payload := autoClosePayload(
 		sweepWindow(900, true, []string{"s1"}),
 		sweepWindow(910, false, []string{"s2"}),
 	)
-	m, _ := autoCloseManager(t, autoCloseFake(sweepRows(), payload))
+	m, now := autoCloseManager(t, autoCloseFake(sweepRows(), payload))
+	m.autoActive[900] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
+	m.autoActive[910] = &windowActivity{lastActiveAt: now.Add(-3 * time.Hour)}
 	m.beginBrowserJob("eval")
 	defer m.finishBrowserJob()
 
@@ -290,8 +314,8 @@ func TestAutoCloseSkipsWhenAJobIsInFlight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AutoCloseTick: %v", err)
 	}
-	if len(closed) != 0 {
-		t.Fatalf("closed = %+v, want none while a job is in flight", closed)
+	if len(closed) != 2 {
+		t.Fatalf("closed = %+v, want both idle windows despite the job", closed)
 	}
 }
 

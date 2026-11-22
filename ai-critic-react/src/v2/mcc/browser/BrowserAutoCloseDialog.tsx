@@ -107,7 +107,7 @@ export function BrowserAutoCloseDialog(props: BrowserAutoCloseDialogProps) {
                 <header className="bwp-achead">
                     <span className="kicker">AUTO-CLOSE</span>
                     <h3 id="bwp-actitle">Idle windows</h3>
-                    <p>Close Chrome windows nobody has used for a while. The window you are viewing always stays.</p>
+                    <p>Close Chrome windows nobody has used for a while. No exceptions: the window you are viewing and the last window close too.</p>
                     <button type="button" className="bwp-acx" onClick={onClose} disabled={saving} aria-label="Close">
                         ×
                     </button>
@@ -195,7 +195,7 @@ export function BrowserAutoCloseDialog(props: BrowserAutoCloseDialogProps) {
                         </div>
                         <BrowserNextTen rows={rows} thresholdSeconds={threshold} enabled={enabled} />
                         <p className="bwp-acskip">
-                            Never closed: this window, Chrome's last window, any window running an agent job.
+                            No exemptions. Closing the last window quits Chrome; the next start reopens one.
                         </p>
                     </section>
 

@@ -50,7 +50,8 @@ test('saved intervals map back to the preset that produced them', () => {
 });
 
 test('a window chip explains the next close without jumping the gun', () => {
-    assert.equal(idleChipLabel({ current: true, idle_seconds: 7200 }, 3600, true), 'in use');
+    // No exemptions: even the window being viewed gets a real countdown.
+    assert.equal(idleChipLabel({ current: true, idle_seconds: 7200 }, 3600, true), 'closing now');
     assert.equal(idleChipLabel({ idle_seconds: 0 }, 3600, true), '');
     assert.equal(idleChipLabel({ idle_seconds: 600 }, 3600, false), 'idle 10m');
     assert.equal(idleChipLabel({ idle_seconds: 3600 }, 3600, true), 'closing now');
@@ -64,9 +65,10 @@ test('the footer countdown names the closest window, and stays quiet when off', 
         { idle_seconds: 3480 },
         { idle_seconds: 600 },
     ];
-    assert.equal(nextCloseLabel(rows, 3600, true), 'closes in 2m');
+    assert.equal(nextCloseLabel(rows, 3600, true), 'closing now');
     assert.equal(nextCloseLabel(rows, 3600, false), 'windows stay open');
-    assert.equal(nextCloseLabel([{ current: true, idle_seconds: 9999 }], 3600, true), 'watching');
+    assert.equal(nextCloseLabel([{ current: true, idle_seconds: 9999 }], 3600, true), 'closing now');
+    assert.equal(nextCloseLabel([], 3600, true), 'watching');
     assert.equal(nextCloseLabel([{ idle_seconds: 3700 }], 3600, true), 'closing now');
 });
 
@@ -134,7 +136,7 @@ test('a custom draft is clamped before it can become a rule', () => {
 test('Next 10 ranks oldest activity first and never exceeds ten', () => {
     const rows = [
         { key: 'current', current: true, idle_seconds: 9999 },
-        { key: 'busy', busy: true, idle_seconds: 9999 },
+        { key: 'busy', busy: true, idle_seconds: 9998 },
         { key: 'a', idle_seconds: 60, tabCount: 2 },
         { key: 'b', idle_seconds: 7200, tabCount: 4 },
         { key: 'c', idle_seconds: 1800, tabCount: 1 },
@@ -149,26 +151,30 @@ test('Next 10 ranks oldest activity first and never exceeds ten', () => {
     ];
     const plan = nextTen(rows);
     assert.equal(plan.length, AUTO_CLOSE_NEXT_LIMIT);
+    // Nothing is exempt: the viewed and busy windows rank like the rest.
     // Ties break on key so two renders cannot disagree.
     assert.deepEqual(
         plan.map((row) => row.key),
-        ['b', 'd', 'h', 'i', 'e', 'f', 'c', 'j', 'g', 'a'],
+        ['current', 'busy', 'b', 'd', 'h', 'i', 'e', 'f', 'c', 'j'],
     );
     assert.ok(plan.every((row) => row.idleSeconds >= plan[plan.length - 1].idleSeconds));
 });
 
-test('Next 10 drops the exempt windows instead of ranking them', () => {
+test('Next 10 ranks the viewed and busy windows instead of dropping them', () => {
     const plan = nextTen([
         { key: 'current', current: true, idle_seconds: 7200 },
         { key: 'busy', busy: true, idle_seconds: 7200 },
         { key: 'idle', idle_seconds: 7200, tabCount: 2 },
     ]);
-    assert.deepEqual(plan.map((row) => row.key), ['idle']);
+    assert.deepEqual(plan.map((row) => row.key), ['busy', 'current', 'idle']);
 });
 
 test('Next 10 copes with fewer windows than the cap, and with none', () => {
     assert.deepEqual(nextTen([{ key: 'only', idle_seconds: 300 }]).map((row) => row.key), ['only']);
-    assert.deepEqual(nextTen([{ key: 'current', current: true, idle_seconds: 300 }]), []);
+    assert.deepEqual(
+        nextTen([{ key: 'current', current: true, idle_seconds: 300 }]).map((row) => row.key),
+        ['current'],
+    );
     assert.deepEqual(nextTen([]), []);
     assert.equal(nextTen([], 0).length, 0);
 });

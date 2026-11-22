@@ -32,13 +32,13 @@ export function BrowserNextTen({ rows, thresholdSeconds, enabled }: BrowserNextT
             </div>
         );
     }
-    const total = rows.filter((row) => !row.current && !row.busy).length;
+    const total = rows.length;
     const plan = nextTen(rows);
     if (plan.length === 0) {
         return (
             <div className="bwp-acempty">
-                <b>No other window is open</b>
-                <span>The window you are viewing is never closed.</span>
+                <b>No Chrome window is open</b>
+                <span>Open a window and it will appear here once it has a clock.</span>
             </div>
         );
     }
