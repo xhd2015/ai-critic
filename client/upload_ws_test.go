@@ -82,12 +82,12 @@ func TestFrameForRateStaysSmallOnSlowLink(t *testing.T) {
 	const rate = 40 * 1024
 	// 40KB/s can finish 256KB in 6.4s, which is inside the 10s budget, but
 	// 512KB would take 12.8s. The frame must not grow into that.
-	if got := frameForRate(wsInitFrame, rate); got != wsInitFrame*2 && got != wsInitFrame {
+	if got := frameForRate(wsInitFrame, rate, 0); got != wsInitFrame*2 && got != wsInitFrame {
 		t.Fatalf("first grow = %d", got)
 	}
 	cur := wsInitFrame
 	for i := 0; i < 8; i++ {
-		cur = frameForRate(cur, rate)
+		cur = frameForRate(cur, rate, 0)
 	}
 	if cur > 256*1024 {
 		t.Fatalf("frame grew to %d at 40KB/s; want <= 256KB", cur)
@@ -178,5 +178,94 @@ func TestPrepareUploadPayloadFile_CompressWhenSmaller(t *testing.T) {
 	}
 	if hash == "" || path == src {
 		t.Fatalf("hash=%q path=%s", hash, path)
+	}
+}
+
+// TestFrameForRateRespectsChunkCap pins that --chunk-size is a hard ceiling on
+// the websocket frame, so a fast link cannot grow past the operator's choice.
+func TestFrameForRateRespectsChunkCap(t *testing.T) {
+	const cap = 128 * 1024
+	const fast = 10 * 1024 * 1024
+	cur := initFrameForChunk(cap)
+	for i := 0; i < 20; i++ {
+		cur = frameForRate(cur, fast, cap)
+	}
+	if cur != cap {
+		t.Fatalf("frame = %d, want it capped at %d", cur, cap)
+	}
+}
+
+func TestInitFrameForChunk(t *testing.T) {
+	tests := []struct {
+		cap, want int
+	}{
+		{0, wsInitFrame},
+		{wsMaxFrame, wsInitFrame},
+		{32 * 1024, 32 * 1024},
+		{4 * 1024, 4 * 1024},
+	}
+	for _, tc := range tests {
+		if got := initFrameForChunk(tc.cap); got != tc.want {
+			t.Fatalf("initFrameForChunk(%d) = %d, want %d", tc.cap, got, tc.want)
+		}
+	}
+}
+
+func TestEffectiveChunkSizeClamps(t *testing.T) {
+	tests := []struct {
+		in, want int
+	}{
+		{0, 0},
+		{1024, 4 * 1024},
+		{64 * 1024, 64 * 1024},
+		{16 * 1024 * 1024, wsMaxFrame},
+	}
+	for _, tc := range tests {
+		opts := UploadOptions{ChunkSize: tc.in}
+		if got := opts.effectiveChunkSize(); got != tc.want {
+			t.Fatalf("effectiveChunkSize(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestUploadFileWS_ChunkSizeRoundTrip pins that a capped frame size still
+// delivers an identical file: the cap changes transfer granularity, not content.
+func TestUploadFileWS_ChunkSizeRoundTrip(t *testing.T) {
+	for _, size := range []int{4 * 1024, 128 * 1024, 0} {
+		name := "adaptive"
+		if size > 0 {
+			name = fmt.Sprintf("%d", size)
+		}
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			destDir := t.TempDir()
+			mux := http.NewServeMux()
+			fileupload.RegisterAPIForHome(mux, home)
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			src := filepath.Join(t.TempDir(), "payload.bin")
+			// Random-ish bytes so gzip cannot shrink it and the chunk path is used.
+			raw := make([]byte, 600*1024)
+			for i := range raw {
+				raw[i] = byte(i*7 + i/251)
+			}
+			if err := os.WriteFile(src, raw, 0644); err != nil {
+				t.Fatal(err)
+			}
+			dest := filepath.Join(destDir, "payload.bin")
+			cli := New(srv.URL, "")
+			res, err := cli.UploadFile(src, dest, UploadOptions{NoCompress: true, ChunkSize: size}, nil)
+			if err != nil {
+				t.Fatalf("upload with ChunkSize=%d: %v", size, err)
+			}
+			got, err := os.ReadFile(res.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, raw) {
+				t.Fatalf("ChunkSize=%d: dest len=%d want %d", size, len(got), len(raw))
+			}
+		})
 	}
 }

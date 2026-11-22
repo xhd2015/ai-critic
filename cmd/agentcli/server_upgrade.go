@@ -32,6 +32,9 @@ Options:
   --goos OS             Override target GOOS (default: from remote os_info / binary name).
   --goarch ARCH         Override target GOARCH (default: from remote os_info / binary name).
   --skip-frontend       Skip the Vite frontend build.
+  --chunk-size SIZE     Cap the upload frame size (bytes, or a K/M suffix). Use
+                        on a slow or lossy link: a dropped connection then costs
+                        one small frame instead of a megabyte. Default adaptive.
   --dry-run             Resolve source and target, print steps, do not build/upload/restart.
   -h, --help            Show this help message.
 `
@@ -43,6 +46,7 @@ func runServerUpgrade(resolve func() (*client.Client, error), args []string) err
 	var goarchFlag string
 	var skipFrontend bool
 	var dryRun bool
+	var chunkSizeRaw string
 
 	args, err := flags.
 		Bool("--from-source", &fromSource).
@@ -51,6 +55,7 @@ func runServerUpgrade(resolve func() (*client.Client, error), args []string) err
 		String("--goarch", &goarchFlag).
 		Bool("--skip-frontend", &skipFrontend).
 		Bool("--dry-run", &dryRun).
+		String("--chunk-size", &chunkSizeRaw).
 		Help("-h,--help", serverUpgradeHelp).
 		Parse(args)
 	if err != nil {
@@ -61,6 +66,14 @@ func runServerUpgrade(resolve func() (*client.Client, error), args []string) err
 	}
 	if !fromSource {
 		return fmt.Errorf("server upgrade requires --from-source (see --help)")
+	}
+	chunkSize := 0
+	if strings.TrimSpace(chunkSizeRaw) != "" {
+		parsed, parseErr := parseChunkSize(chunkSizeRaw)
+		if parseErr != nil {
+			return parseErr
+		}
+		chunkSize = int(parsed)
 	}
 
 	resolvedDir, notice, err := resolveUpgradeSourceDir(sourceDir)
@@ -90,7 +103,7 @@ func runServerUpgrade(resolve func() (*client.Client, error), args []string) err
 	if dryRun {
 		fmt.Println("dry-run: would build frontend (unless --skip-frontend)")
 		fmt.Printf("dry-run: would cross-compile -> %s\n", outPath)
-		fmt.Println("dry-run: would upload-next and restart")
+		fmt.Printf("dry-run: would upload-next (chunk-size %s) and restart\n", describeChunkSize(chunkSize))
 		return nil
 	}
 
@@ -98,7 +111,7 @@ func runServerUpgrade(resolve func() (*client.Client, error), args []string) err
 		return err
 	}
 
-	if err := uploadLocalBinaryNext(cli, outPath); err != nil {
+	if err := uploadLocalBinaryNextWithChunk(cli, outPath, chunkSize); err != nil {
 		return err
 	}
 
@@ -322,6 +335,12 @@ func buildUpgradeBinary(sourceDir, outPath, goos, goarch string, skipFrontend bo
 }
 
 func uploadLocalBinaryNext(cli *client.Client, localBinary string) error {
+	return uploadLocalBinaryNextWithChunk(cli, localBinary, 0)
+}
+
+// uploadLocalBinaryNextWithChunk uploads the next server binary, optionally
+// capping the transfer frame size for slow links.
+func uploadLocalBinaryNextWithChunk(cli *client.Client, localBinary string, chunkSize int) error {
 	stat, err := os.Stat(localBinary)
 	if err != nil {
 		return fmt.Errorf("failed to stat local binary: %w", err)
@@ -351,6 +370,7 @@ func uploadLocalBinaryNext(cli *client.Client, localBinary string) error {
 
 	result, err := cli.UploadFile(localBinary, target.BinaryPath, client.UploadOptions{
 		ChmodExec: true,
+		ChunkSize: chunkSize,
 	}, printUploadProgress)
 	if err != nil {
 		return err
@@ -378,4 +398,12 @@ func printRestartResult(result *client.RestartServerResult) {
 		return
 	}
 	fmt.Println("Server is back up and reachable.")
+}
+
+// describeChunkSize renders the chunk-size for a dry-run line.
+func describeChunkSize(size int) string {
+	if size <= 0 {
+		return "adaptive"
+	}
+	return formatSize(int64(size))
 }

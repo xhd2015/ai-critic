@@ -38,6 +38,12 @@ Options:
   --no-compress   Skip gzip of file payloads (directory archives are always xz).
   --no-override   For directory uploads: refuse if any remote file would be
                   overwritten (preflight + fail-fast during apply).
+  --chunk-size SIZE
+                  Cap one unit of transfer: the websocket frame size, and the
+                  chunk size on the HTTP fallback path. Default is adaptive
+                  (frames grow to 1M on a fast link). Set it on a slow or lossy
+                  link so a dropped connection costs one small frame, e.g.
+                  512K or 1M. Accepts bytes or a K/M suffix.
 
 Examples:
   remote-agent upload ./foo.txt /tmp/foo.txt
@@ -48,6 +54,7 @@ Examples:
   remote-agent upload --no-override ./srcdir /tmp/apps
   remote-agent upload --dry-run ./srcdir /tmp/apps
   remote-agent upload --no-compress ./bin /tmp/bin
+  remote-agent upload --chunk-size 512K ./ai-critic-server /home/u/ai-critic-server
 `
 
 func runUpload(cli *client.Client, args []string) error {
@@ -56,7 +63,12 @@ func runUpload(cli *client.Client, args []string) error {
 		return nil
 	}
 
-	dryRun, noCompress, noOverride, args := parseUploadFlags(args)
+	uf, err := parseUploadFlags(args)
+	if err != nil {
+		return err
+	}
+	dryRun, noCompress, noOverride := uf.dryRun, uf.noCompress, uf.noOverride
+	args = uf.rest
 	if len(args) < 1 {
 		return fmt.Errorf("upload requires <LOCAL_PATH> [REMOTE_PATH]; see 'remote-agent upload --help'")
 	}
@@ -93,6 +105,7 @@ func runUpload(cli *client.Client, args []string) error {
 		ChmodExec:  chmodExec,
 		NoCompress: noCompress,
 		DryRun:     dryRun,
+		ChunkSize:  int(uf.chunkSize),
 	}
 	progressFn := printUploadProgress
 	if dryRun {

@@ -103,6 +103,31 @@ type UploadOptions struct {
 	DryRun     bool
 	// NoOverride refuses directory uploads that would overwrite existing remote files.
 	NoOverride bool
+	// ChunkSize caps one unit of progress: the websocket frame size on the
+	// streaming path and the chunk size on the HTTP fallback path. Zero keeps
+	// the adaptive default, which grows frames up to wsMaxFrame. Set it on a
+	// slow or lossy link so a dropped connection costs one small frame instead
+	// of a megabyte, and so each resume lands on a nearer boundary.
+	ChunkSize int
+}
+
+// effectiveChunkSize resolves the requested unit size, clamping to the range the
+// two transports can honour. A value above wsMaxFrame would defeat the write
+// deadline (one frame could outlive the connection); a value below 4 KiB just
+// adds per-frame overhead.
+func (o UploadOptions) effectiveChunkSize() int {
+	size := o.ChunkSize
+	if size <= 0 {
+		return 0
+	}
+	const minChunk = 4 * 1024
+	if size < minChunk {
+		return minChunk
+	}
+	if size > wsMaxFrame {
+		return wsMaxFrame
+	}
+	return size
 }
 
 // UploadFile reads localFile and uploads it to remotePath on the server
@@ -181,7 +206,7 @@ func (c *Client) uploadFileResolved(localFile string, remotePath string, logical
 	if err != nil {
 		return nil, fmt.Errorf("failed to read local file: %w", err)
 	}
-	fileHash, chunks := computeBytesChunkPlan(payload, ChunkSize)
+	fileHash, chunks := computeBytesChunkPlan(payload, chunkSizeOr(opts.effectiveChunkSize(), ChunkSize))
 	totalSize := int64(len(payload))
 
 	totalChunks := len(chunks)
@@ -391,4 +416,13 @@ func (c *Client) completeUpload(uploadID string) (*UploadResult, error) {
 		return nil, fmt.Errorf("failed to decode complete response: %w", err)
 	}
 	return &out, nil
+}
+
+// chunkSizeOr falls back to def when size is unset, so callers can pass the
+// result of effectiveChunkSize() directly.
+func chunkSizeOr(size, def int) int {
+	if size <= 0 {
+		return def
+	}
+	return size
 }

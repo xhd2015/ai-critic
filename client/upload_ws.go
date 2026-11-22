@@ -106,25 +106,39 @@ func (c *Client) uploadFileWS(localFile, remotePath string, origSize int64, opts
 }
 
 // frameForRate grows cur only when rate can send the next size inside
-// wsFrameBudget. A zero rate keeps the current frame.
-func frameForRate(cur int, rate int64) int {
+// wsFrameBudget. A zero rate keeps the current frame. maxFrame caps growth: zero
+// means wsMaxFrame, a positive value is the caller's --chunk-size ceiling.
+func frameForRate(cur int, rate int64, maxFrame int) int {
+	if maxFrame <= 0 || maxFrame > wsMaxFrame {
+		maxFrame = wsMaxFrame
+	}
 	if cur < wsInitFrame {
 		cur = wsInitFrame
 	}
-	if cur >= wsMaxFrame || rate <= 0 {
-		if cur > wsMaxFrame {
-			return wsMaxFrame
-		}
+	if cur > maxFrame {
+		cur = maxFrame
+	}
+	if cur >= maxFrame || rate <= 0 {
 		return cur
 	}
 	next := cur * 2
-	if next > wsMaxFrame {
-		next = wsMaxFrame
+	if next > maxFrame {
+		next = maxFrame
 	}
 	if time.Duration(next)*time.Second/time.Duration(rate) > wsFrameBudget {
 		return cur
 	}
 	return next
+}
+
+// initFrameForChunk is the starting frame for a chunk-size cap. A cap below the
+// default initial frame starts there instead, so the first write already honours
+// the operator's choice instead of overshooting once.
+func initFrameForChunk(maxFrame int) int {
+	if maxFrame <= 0 || maxFrame > wsInitFrame {
+		return wsInitFrame
+	}
+	return maxFrame
 }
 
 func writeWSBinary(conn *websocket.Conn, p []byte) error {
@@ -273,13 +287,18 @@ func (c *Client) uploadFileWSOnce(wirePath, remotePath, hash string, wireSize, o
 
 	sent := offset
 	acked := offset
-	frame := wsInitFrame
+	maxFrame := opts.effectiveChunkSize()
+	frame := initFrameForChunk(maxFrame)
 	window := wsInitWindow
 	okFrames := 0
 	t0 := time.Now()
 	lastReport := time.Time{}
 
-	buf := make([]byte, wsMaxFrame)
+	bufSize := wsMaxFrame
+	if maxFrame > 0 {
+		bufSize = maxFrame
+	}
+	buf := make([]byte, bufSize)
 	for sent < wireSize {
 		select {
 		case err := <-errCh:
@@ -290,7 +309,7 @@ func (c *Client) uploadFileWSOnce(wirePath, remotePath, hash string, wireSize, o
 			}
 			okFrames++
 			if okFrames%8 == 0 {
-				frame = frameForRate(frame, rateSince(t0, sent-offset))
+				frame = frameForRate(frame, rateSince(t0, sent-offset), maxFrame)
 			}
 			if window < wsMaxWindow {
 				window *= 2

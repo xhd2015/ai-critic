@@ -64,6 +64,11 @@ For example, if the remote directory contains:
 the upload target is ai-critic-server-v16 in that same directory.
 
 The uploaded file is marked executable on the remote server.
+
+Options:
+  --chunk-size SIZE   Cap the upload frame size (bytes, or a K/M suffix).
+                      On a slow or lossy link this makes each retry cheaper.
+  -h, --help          Show this help message.
 `
 
 const serverRestartHelp = `Usage: remote-agent server restart
@@ -146,19 +151,31 @@ func runServerBuildNext(resolve func() (*client.Client, error), args []string) e
 }
 
 func runServerUploadNext(resolve func() (*client.Client, error), args []string) error {
+	var chunkSizeRaw string
+	args, err := flags.
+		String("--chunk-size", &chunkSizeRaw).
+		Help("-h,--help", serverUploadNextHelp).
+		Parse(args)
+	if err != nil {
+		return err
+	}
 	if len(args) != 1 {
-		if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-			fmt.Print(serverUploadNextHelp)
-			return nil
-		}
 		return fmt.Errorf("server upload-next requires exactly 1 argument <local-binary>")
+	}
+	chunkSize := 0
+	if strings.TrimSpace(chunkSizeRaw) != "" {
+		parsed, parseErr := parseChunkSize(chunkSizeRaw)
+		if parseErr != nil {
+			return parseErr
+		}
+		chunkSize = int(parsed)
 	}
 
 	cli, err := resolve()
 	if err != nil {
 		return err
 	}
-	return uploadLocalBinaryNext(cli, args[0])
+	return uploadLocalBinaryNextWithChunk(cli, args[0], chunkSize)
 }
 
 func getNextBinaryTargetForUpload(cli *client.Client) (*client.NextBinaryTarget, bool, error) {
