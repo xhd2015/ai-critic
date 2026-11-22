@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { BrowserKeysMore } from './BrowserKeysMore';
+import type { ModifierName } from './BrowserKeysMore';
 
 interface KeyDef {
     label: string;
@@ -24,6 +26,12 @@ interface BrowserKeysProps {
     onClose: () => void;
     onText: (text: string) => void;
     onKey: (key: string, code: string, vk: number) => void;
+    /** Send one key with latched modifiers, then clear the latch. */
+    onKeyWithModifiers: (key: string, code: string, vk: number, modifiers: ModifierName[]) => void;
+    onShortcut: (key: string, code: string, modifiers: ModifierName[]) => void;
+    onCopy: () => void;
+    onPaste: (text: string) => void;
+    onContextMenu: () => void;
 }
 
 /**
@@ -34,10 +42,37 @@ interface BrowserKeysProps {
  * character would double characters inside the page. Navigation keys are
  * separate so a form can be submitted without switching back to the picture.
  */
-export function BrowserKeys({ visible, onClose, onText, onKey }: BrowserKeysProps) {
+export function BrowserKeys({
+    visible,
+    onClose,
+    onText,
+    onKey,
+    onKeyWithModifiers,
+    onShortcut,
+    onCopy,
+    onPaste,
+    onContextMenu,
+}: BrowserKeysProps) {
     const [draft, setDraft] = useState('');
+    const [more, setMore] = useState(false);
+    const [latched, setLatched] = useState<ModifierName[]>([]);
 
     if (!visible) return null;
+
+    const toggleModifier = (name: ModifierName) =>
+        setLatched((was) => (was.includes(name) ? was.filter((item) => item !== name) : [...was, name]));
+
+    const sendKey = (key: string, code: string, vk: number) => {
+        if (latched.length === 0) {
+            onKey(key, code, vk);
+            return;
+        }
+        // A latched modifier means "this key is a combination", so the press goes
+        // out with the mask and the latch clears: holding it for the next key too
+        // is how a stuck Ctrl happens.
+        onKeyWithModifiers(key, code, vk, latched);
+        setLatched([]);
+    };
 
     const send = () => {
         if (!draft) return;
@@ -76,12 +111,33 @@ export function BrowserKeys({ visible, onClose, onText, onKey }: BrowserKeysProp
                         key={item.key}
                         type="button"
                         className={`bw-key${item.wide ? ' is-wide' : ''}`}
-                        onClick={() => onKey(item.key, item.code, item.vk)}
+                        onClick={() => sendKey(item.key, item.code, item.vk)}
                     >
                         {item.label}
                     </button>
                 ))}
+                <button
+                    type="button"
+                    className={`bw-key bw-key-more${more ? ' is-on' : ''}`}
+                    data-keys="more"
+                    aria-expanded={more}
+                    onClick={() => setMore((was) => !was)}
+                >
+                    {more ? '▾' : '⌨'} More
+                </button>
             </div>
+            {more && (
+                <BrowserKeysMore
+                    latched={latched}
+                    onToggleModifier={toggleModifier}
+                    onKeyWithModifiers={(key, code, vk) => sendKey(key, code, vk)}
+                    onShortcut={onShortcut}
+                    onCopy={onCopy}
+                    onPaste={onPaste}
+                    onContextMenu={onContextMenu}
+                    onCollapse={() => setMore(false)}
+                />
+            )}
         </div>
     );
 }

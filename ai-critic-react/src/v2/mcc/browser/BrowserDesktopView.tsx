@@ -3,6 +3,7 @@ import { BrowserDock } from './BrowserDock';
 import { autoCloseRows } from './autoClose';
 import { useAutoCloseToast } from './useAutoCloseToast';
 import { BrowserKeys } from './BrowserKeys';
+import type { ModifierName } from './BrowserKeysMore';
 import { BrowserRail } from './BrowserRail';
 import { BrowserTabs } from './BrowserTabs';
 import { BrowserToolbar } from './BrowserToolbar';
@@ -67,6 +68,11 @@ export interface BrowserDesktopViewProps {
     onKeysClose: () => void;
     onText: (text: string) => void;
     onKey: (key: string, code: string, vk?: number) => void;
+    onKeyWithModifiers: (key: string, code: string, vk: number, modifiers: ModifierName[]) => void;
+    onShortcut: (key: string, code: string, modifiers: ModifierName[]) => void;
+    onCopy: () => void;
+    onPaste: (text: string) => void;
+    onContextMenu: () => void;
     onLens: (lens: Lens) => void;
     onKeys: () => void;
     onHelp: () => void;
@@ -161,6 +167,11 @@ export function BrowserDesktopView(props: BrowserDesktopViewProps) {
                     onClose={props.onKeysClose}
                     onText={props.onText}
                     onKey={props.onKey}
+                    onKeyWithModifiers={props.onKeyWithModifiers}
+                    onShortcut={props.onShortcut}
+                    onCopy={props.onCopy}
+                    onPaste={props.onPaste}
+                    onContextMenu={props.onContextMenu}
                 />
                 <BrowserDock
                     lens={props.lens}

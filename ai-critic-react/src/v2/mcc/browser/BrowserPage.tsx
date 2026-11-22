@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { navigateTarget } from './browserApi';
+import { navigateTarget, stepHistory as stepHistoryRequest } from './browserApi';
 import { useBrowserStream } from './useBrowserStream';
 import { useBrowserSessions } from './useBrowserSessions';
 import { useBrowserZoom } from './useBrowserZoom';
@@ -83,9 +83,10 @@ export default function BrowserPage() {
     const [dragging, setDragging] = useState(false);
     const [toast, setToast] = useState('');
     const [toastWarn, setToastWarn] = useState(false);
-    const [keysVisible, setKeysVisible] = useState(() =>
-        typeof window !== 'undefined' ? !!window.matchMedia?.('(pointer: coarse)').matches : false,
-    );
+    // Closed by default, and never opened by switching lenses: a person who taps
+    // CTRL wants to click the page, and a keyboard sliding up over the picture
+    // covers exactly what they were about to tap.
+    const [keysVisible, setKeysVisible] = useState(false);
 
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -300,6 +301,32 @@ export default function BrowserPage() {
         showToast('Reloading the tab…');
     };
 
+    const stepHistory = (direction: 'back' | 'forward') => {
+        void (async () => {
+            try {
+                await stepHistoryRequest(direction);
+                zoom.reset();
+            } catch (err) {
+                showToast(err instanceof Error ? err.message : String(err), true);
+            }
+        })();
+    };
+
+    const closeCurrentTab = () => {
+        // The tab is about to disappear, so the mirror returns to the fit zoom.
+        send({ type: 'tab_close' });
+        zoom.reset();
+    };
+
+    const runShortcut = (key: string, code: string, modifiers: string[]) =>
+        send({ type: 'shortcut', key, code, vk: undefined, modifier_names: modifiers });
+
+    const copySelection = () => send({ type: 'copy' });
+
+    const pasteText = (text: string) => send({ type: 'paste', text });
+
+    const openContextMenu = () => send({ type: 'context_menu', x: 0.5, y: 0.5 });
+
     const pickTab = (tabId: number) => {
         setSheet('closed');
         void activateTab(tabId);
@@ -437,6 +464,17 @@ export default function BrowserPage() {
                         onKeys={() => setKeysVisible((was) => !was)}
                         onText={(text) => send({ type: 'text', text })}
                         onKey={(key, code, vk) => send({ type: 'key', key, code, vk })}
+                        history={status?.history}
+                        startup={status?.startup}
+                        onHistory={stepHistory}
+                        onCloseTabCurrent={closeCurrentTab}
+                        onShortcut={runShortcut}
+                        onKeyWithModifiers={(key, code, vk, mods) =>
+                            send({ type: 'shortcut', key, code, vk, modifier_names: mods })
+                        }
+                        onCopy={copySelection}
+                        onPaste={pasteText}
+                        onContextMenu={openContextMenu}
                     >
                         {stage}
                     </BrowserPhoneView>
@@ -493,6 +531,13 @@ export default function BrowserPage() {
                     onKeysClose={() => setKeysVisible(false)}
                     onText={(text) => send({ type: 'text', text })}
                     onKey={(key, code, vk) => send({ type: 'key', key, code, vk })}
+                    onKeyWithModifiers={(key, code, vk, mods) =>
+                        send({ type: 'shortcut', key, code, vk, modifier_names: mods })
+                    }
+                    onShortcut={runShortcut}
+                    onCopy={copySelection}
+                    onPaste={pasteText}
+                    onContextMenu={openContextMenu}
                     onLens={setLens}
                     onKeys={() => setKeysVisible((was) => !was)}
                     onHelp={() => setHelpOpen(true)}

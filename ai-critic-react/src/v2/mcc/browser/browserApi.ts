@@ -56,6 +56,11 @@ export function switchSession(id: string): Promise<BrowserStatus> {
     return post('/api/browser/session', { session_id: id }).then((response) => json<BrowserStatus>(response));
 }
 
+/** Step the driven tab one entry back or forward through its own history. */
+export function stepHistory(direction: 'back' | 'forward'): Promise<BrowserStatus> {
+    return post('/api/browser/history', { direction }).then((response) => json<BrowserStatus>(response));
+}
+
 /** Navigate exactly the selected content tab, even if another viewer switches. */
 export function navigateTarget(sessionId: string, tabId: number, url: string): Promise<BrowserStatus> {
     return post('/api/browser/navigate', { session_id: sessionId, tab_id: tabId, url }).then((response) => json<BrowserStatus>(response));

@@ -289,6 +289,7 @@ func (m *Manager) pollTabs(ctx context.Context) {
 			return
 		}
 		m.finishPollTabs(sessionID, info)
+		m.refreshHistoryCache(ctx)
 		m.followPopupWindow(ctx, sessionID)
 		return
 	}
@@ -317,6 +318,7 @@ func (m *Manager) pollTabs(ctx context.Context) {
 		return
 	}
 	m.finishPollTabs(sessionID, info)
+	m.refreshHistoryCache(ctx)
 }
 
 // finishPollTabs applies a fresh info snapshot and follows the user's tab

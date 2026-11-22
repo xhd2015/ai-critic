@@ -38,10 +38,14 @@ type clientMessage struct {
 	Code      string  `json:"code"`
 	VK        int     `json:"vk"`
 	Modifiers int     `json:"modifiers"`
-	Text      string  `json:"text"`
+	// ModifierNames lets a shortcut say ["ctrl"] instead of a numeric mask.
+	ModifierNames []string `json:"modifier_names,omitempty"`
+	Text          string   `json:"text"`
 	URL       string  `json:"url"`
 	Preset    string  `json:"preset"`
 	Mode      string  `json:"mode"`
+	// Direction is "back" or "forward" for the history message.
+	Direction string `json:"direction,omitempty"`
 	// Dialog answers a JS dialog on the driven tab (type "dialog").
 	DialogAccept *bool  `json:"accept,omitempty"`
 	DialogText   string `json:"prompt_text,omitempty"`
@@ -114,6 +118,17 @@ func (m *Manager) readLoop(v *viewer) {
 			m.hub.enqueueInput(InputEvent{Kind: InputKey, Key: msg.Key, Code: msg.Code, VK: msg.VK, Modifiers: msg.Modifiers})
 		case InputText:
 			m.hub.enqueueInput(InputEvent{Kind: InputText, Text: msg.Text})
+		case InputShortcut:
+			m.hub.enqueueInput(InputEvent{Kind: InputShortcut, Key: msg.Key, Code: msg.Code, VK: msg.VK,
+				Modifiers: msg.Modifiers, ModifierNames: msg.ModifierNames})
+		case InputCopy, InputPaste:
+			m.hub.enqueueInput(InputEvent{Kind: msg.Type, Text: msg.Text})
+		case InputContextMenu:
+			m.hub.enqueueInput(InputEvent{Kind: InputContextMenu, X: clamp01(msg.X), Y: clamp01(msg.Y)})
+		case InputTabClose:
+			m.hub.enqueueInput(InputEvent{Kind: InputTabClose})
+		case "history":
+			go m.handleControl(v, msg)
 		case "navigate", "preset", "mode", "refresh", "status", "dialog":
 			go m.handleControl(v, msg)
 		}
@@ -141,6 +156,10 @@ func (m *Manager) handleControl(v *viewer, msg clientMessage) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		accept := msg.DialogAccept != nil && *msg.DialogAccept
 		err = m.AnswerDialog(ctx, accept, msg.DialogText)
+		cancel()
+	case "history":
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		err = m.StepHistory(ctx, msg.Direction == "forward")
 		cancel()
 	}
 	if err != nil {

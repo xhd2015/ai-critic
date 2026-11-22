@@ -62,7 +62,8 @@ func (m *Manager) handleInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch body.Kind {
-	case InputTap, InputDown, InputMove, InputUp, InputWheel, InputKey, InputText:
+	case InputTap, InputDown, InputMove, InputUp, InputWheel, InputKey, InputText,
+		InputShortcut, InputCopy, InputPaste, InputContextMenu, InputTabClose:
 	default:
 		writeError(w, http.StatusBadRequest, "unknown input type")
 		return

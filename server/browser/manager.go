@@ -222,6 +222,8 @@ type Manager struct {
 	lastOpenAt    time.Time
 	viewportAt    time.Time
 	tabsAt        time.Time
+	history       HistoryStatus
+	historyAt     time.Time
 	// newWindowFor marks the session whose page must open in a fresh Chrome
 	// window (the + New window path); every other session page reuses the
 	// window it already has.
@@ -1695,6 +1697,18 @@ func (m *Manager) SendInput(ctx context.Context, ev InputEvent) error {
 		}
 	case InputKey:
 		return m.dispatchKey(ctx, tab, ev)
+	case InputShortcut:
+		ev.Modifiers = shortcutModifiers(ev.ModifierNames)
+		return m.dispatchKey(ctx, tab, ev)
+	case InputContextMenu:
+		return m.openContextMenu(ctx, tab, ev.X, ev.Y)
+	case InputTabClose:
+		return m.closeDrivenTab(ctx)
+	case InputCopy:
+		_, err := m.copySelection(ctx, tab)
+		return err
+	case InputPaste:
+		return m.pasteText(ctx, tab, ev.Text)
 	case InputText:
 		if ev.Text == "" {
 			return nil
@@ -1783,6 +1797,9 @@ type Status struct {
 	// current one, which is what ActiveTabID points at.
 	Tabs        []TabInfo `json:"tabs"`
 	ActiveTabID int64     `json:"active_tab_id,omitempty"`
+	// History is the driven tab's navigation position. It is a snapshot of the
+	// cached value so this call never issues a CDP round trip.
+	History HistoryStatus `json:"history"`
 	// ReadOnly is set when the daemon predates tab multiplexing, so the UI can
 	// explain instead of failing each click.
 	ReadOnly bool   `json:"read_only,omitempty"`
@@ -1861,6 +1878,7 @@ func (m *Manager) Snapshot() Status {
 		},
 		Tabs:        cloneTabs(m.tabs),
 		ActiveTabID: m.drivenTabLocked(),
+		History:     m.history,
 		ReadOnly:    m.readOnly,
 		Startup:     m.startup,
 		Error:       m.lastErr,

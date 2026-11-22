@@ -17,6 +17,19 @@ const (
 	InputWheel = "wheel"
 	InputKey   = "key"
 	InputText  = "text"
+	// InputShortcut presses one key with the modifiers the client already
+	// resolved, so a palette button (Ctrl-A, Cmd-V) is one message instead of a
+	// press/release pair the client has to keep in sync.
+	InputShortcut = "shortcut"
+	// InputCopy / InputPaste use the clipboard API, which is what works when the
+	// page has no selection of its own to act on.
+	InputCopy  = "copy"
+	InputPaste = "paste"
+	// InputContextMenu opens the page's own right-click menu at the last point
+	// the viewer tapped.
+	InputContextMenu = "context_menu"
+	// InputTabClose closes the driven tab (not the window).
+	InputTabClose = "tab_close"
 )
 
 // Pointer buttons, matching the screen protocol so the two pages feel alike.
@@ -48,6 +61,9 @@ type InputEvent struct {
 	Code      string  `json:"code"`
 	VK        int     `json:"vk"`
 	Modifiers int     `json:"modifiers"`
+	// ModifierNames is the shortcut kind's spelling of Modifiers: the client
+	// sends ["ctrl"] or ["meta","shift"] and the server owns the CDP numbers.
+	ModifierNames []string `json:"modifier_names,omitempty"`
 	Text      string  `json:"text"`
 }
 

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browser nav bar + expanded keyboard · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1500px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 980px; line-height: 1.55; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 22px; line-height: 1.7; }
+  .assump code, .lead code, .spec code, p code, .caption code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.new { color: #bfdbfe; background: rgba(96,165,250,.16); border: 1px solid rgba(96,165,250,.42); }
+  .tag.fix { color: #fde68a; background: rgba(251,191,36,.14); border: 1px solid rgba(251,191,36,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 36px;
+    border: 8px solid #020617; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+
+  /* ---------- host chrome (the iOS browser around our page) ---------- */
+  .hostbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; background: #0b1220; flex-shrink: 0; }
+  .hostbar .lbl { font-size: 11px; color: var(--mut); font-family: var(--mono); }
+  .hostbar .pill { flex: 1; background: #111a2e; border-radius: 999px; padding: 5px 12px; font-size: 11px; color: #93c5fd; text-align: center; }
+
+  /* ---------- our page ---------- */
+  .stage { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 8px 8px 0; }
+
+  /* existing top card */
+  .bwp-top {
+    display: grid; grid-template-columns: 30px minmax(0,1fr) 34px; align-items: center; gap: 2px;
+    background: var(--card); border: 1px solid #3b4a63; border-radius: 14px;
+    padding: 8px 8px; flex-shrink: 0;
+  }
+  .bwp-icon { width: 28px; height: 28px; border: 0; background: transparent; color: var(--text); display: grid; place-items: center; border-radius: 8px; }
+  .bwp-title { text-align: left; background: none; border: 0; color: inherit; padding: 0 2px; min-width: 0; }
+  .bwp-sess { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bwp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow); flex-shrink: 0; }
+  .bwp-urltext { display: block; font-size: 10.5px; color: var(--mut); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .bwp-urlcap { width: 30px; height: 30px; border: 0; background: transparent; color: #93c5fd; display: grid; place-items: center; border-radius: 8px; }
+
+  /* ===== NEW: nav row ===== */
+  .bwp-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 6px; flex-shrink: 0;
+  }
+  .bwp-navgrp { display: flex; align-items: center; gap: 2px; }
+  .bwp-navbtn {
+    width: 34px; height: 30px; border: 1px solid #3b4a63; background: rgba(30,41,59,.72);
+    color: var(--text); border-radius: 9px; display: grid; place-items: center;
+  }
+  .bwp-navbtn + .bwp-navbtn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }
+  .bwp-navbtn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .bwp-navbtn[disabled] { color: #475569; border-color: #2a3648; background: rgba(30,41,59,.4); }
+  .bwp-dismiss {
+    width: 34px; height: 30px; border: 1px solid rgba(248,113,113,.45); background: rgba(248,113,113,.12);
+    color: #fca5a5; border-radius: 9px; display: grid; place-items: center;
+  }
+  .bwp-navnote { font-size: 9.5px; color: var(--mut); padding-left: 4px; }
+
+  /* page picture */
+  .bwp-shot { flex: 1; min-height: 0; margin-top: 8px; border-radius: 10px; overflow: hidden; background: #f8fafc; position: relative; }
+  .shot-inner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .shot-card { width: 78%; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; box-shadow: 0 6px 18px rgba(15,23,42,.08); }
+  .shot-card .g { display: flex; align-items: center; gap: 7px; font-size: 10px; color: #475569; }
+  .shot-card h4 { font-size: 15px; color: #0f172a; margin: 10px 0 4px; font-weight: 600; }
+  .shot-card p { font-size: 9px; color: #94a3b8; margin: 0 0 12px; }
+  .shot-row { display: flex; align-items: center; gap: 9px; border-top: 1px solid #eef2f7; padding: 8px 0; }
+  .shot-av { width: 20px; height: 20px; border-radius: 50%; background: #0f766e; color: #fff; font-size: 9px; display: grid; place-items: center; font-weight: 700; }
+  .shot-row .nm { font-size: 9.5px; color: #0f172a; }
+  .shot-row .em { font-size: 8.5px; color: #94a3b8; }
+
+  /* bottom bar */
+  .bwp-bottom {
+    display: flex; align-items: center; gap: 8px; padding: 8px 2px 10px; flex-shrink: 0;
+  }
+  .bwp-seg { display: flex; gap: 0; background: #111a2e; border: 1px solid #334155; border-radius: 10px; padding: 2px; }
+  .bwp-seg button { border: 0; background: transparent; color: var(--mut); font-size: 10.5px; font-weight: 800; letter-spacing: .05em; padding: 6px 11px; border-radius: 8px; font-family: var(--font); }
+  .bwp-seg button.is-on { background: #334155; color: #f1f5f9; }
+  .bwp-zoom { margin-left: auto; align-items: center; }
+  .bwp-zoom button { padding: 6px 9px; font-size: 12px; font-weight: 600; letter-spacing: 0; }
+  .bwp-zoom .pct { font-family: var(--mono); font-size: 11px; color: var(--sec); }
+  .bwp-kb { width: 34px; height: 30px; border: 1px solid #334155; background: #111a2e; color: var(--sec); border-radius: 9px; display: grid; place-items: center; margin-left: 6px; }
+  .bwp-kb.is-on { background: rgba(96,165,250,.18); border-color: rgba(96,165,250,.55); color: #bfdbfe; }
+
+  /* ---------- keyboard tray ---------- */
+  .bwp-tray { flex-shrink: 0; padding-bottom: 8px; }
+  .kbd { background: #111a2e; border: 1px solid #334155; border-radius: 13px; padding: 8px; }
+  .kbd-input { display: flex; gap: 6px; align-items: center; }
+  .kbd-input .fake { flex: 1; background: #0b1220; border: 1px solid #334155; border-radius: 9px; padding: 8px 10px; font-size: 12px; color: #475569; }
+  .kbd-input button { border: 1px solid #334155; background: #1e293b; color: #cbd5e1; border-radius: 9px; padding: 8px 12px; font-size: 11px; font-weight: 650; font-family: var(--font); }
+  .kbd-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .key {
+    min-width: 38px; height: 34px; padding: 0 9px; border-radius: 8px;
+    border: 1px solid #334155; background: #1b2740; color: #e2e8f0;
+    font-size: 11px; font-family: var(--mono); display: grid; place-items: center;
+  }
+  .key.wide { min-width: 54px; }
+  .key.act { background: #1e2f4d; border-color: #3f5a86; color: #bfdbfe; font-family: var(--font); font-weight: 650; font-size: 10.5px; }
+  .key.more { margin-left: auto; background: rgba(96,165,250,.16); border-color: rgba(96,165,250,.5); color: #bfdbfe; font-family: var(--font); font-weight: 700; font-size: 10.5px; }
+  .key.mod { font-family: var(--font); font-weight: 700; font-size: 10.5px; }
+  .key.mod.is-on { background: rgba(251,191,36,.2); border-color: rgba(251,191,36,.6); color: #fde68a; }
+  .kbd-sep { display: flex; align-items: center; gap: 7px; margin: 9px 0 2px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); font-weight: 700; }
+  .kbd-sep::after { content: ""; flex: 1; height: 1px; background: #26334a; }
+  .kbd-hint { font-size: 9.5px; color: var(--mut); margin-top: 7px; line-height: 1.5; }
+
+  /* spec table */
+  .spec { margin-top: 40px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 16px 18px; max-width: 1200px; }
+  .spec h3 { margin: 0 0 10px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--sec); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; }
+  td code { font-family: var(--mono); font-size: 10.5px; color: #a5b4fc; }
+  tr:last-child td { border-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Browser：历史前进/后退、关闭当前标签、二级键盘</h1>
+  <p class="lead">
+    四个 frame：A 新增的导航行（VIEW 模式）、B 切到 CTRL 时键盘保持关闭、C 一级键盘（维持现状，只多一个入口）、
+    D 二级键盘（Ctrl/Alt/Delete、复制粘贴、右键菜单、常用快捷键）。
+  </p>
+  <div class="assump">
+    <b>假设与已核实的能力：</b><br />
+    1. 前进/后退走 <code>Page.getNavigationHistory</code> + <code>Page.navigateToHistoryEntry</code>——已在真实标签页上验证可用（后退一步成功）。<br />
+    2. 关闭当前 tab 走现有 <code>Target.closeTarget</code> polyfill（sweep 已在用），<code>tab-close-confirm-v1</code> 负责确认。<br />
+    3. 组合键已具备：<code>InputEvent.Modifiers</code> 支持 <code>ModAlt=1 / ModCtrl=2 / ModMeta=4 / ModShift=8</code>。<br />
+    4. 右键菜单用 <code>Input.dispatchMouseEvent</code> 的 <code>button:"right"</code>（长按菜单在页面层弹出，与桌面一致）。<br />
+    5. 复制/粘贴用 <code>Input.insertText</code> 与 <code>Runtime.evaluate(navigator.clipboard)</code>；另保留组合键 Ctrl/Cmd-C、Ctrl/Cmd-V 作为兜底。
+  </div>
+
+  <div class="frames">
+
+    <!-- ================= A ================= -->
+    <div class="col">
+      <div class="col-h"><h3>A · VIEW 模式</h3><span class="tag new">新增导航行</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>Sign in - Google Accounts</span>
+              <span class="bwp-urltext">https://accounts.google.com/v3/signin/accoun…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+
+          <!-- NEW -->
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn" title="Back"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn" disabled title="Forward"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+              <span class="bwp-navnote">2 / 3</span>
+            </div>
+            <button class="bwp-dismiss" title="Close this tab"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <div class="bwp-shot">
+            <div class="shot-inner">
+              <div class="shot-card">
+                <div class="g"><svg width="11" height="11" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.8-2.1 5.2-4.5 6.8l7 5.4c4.1-3.8 7.2-9.4 7.2-16.7z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7-5.4c-2 1.3-4.5 2.1-8.9 2.1-6.4 0-11.7-3.7-13.6-8.8l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Sign in with Google</div>
+                <h4>Choose an account</h4>
+                <p>to continue to opencode.ai</p>
+                <div class="shot-row"><div class="shot-av">H</div><div><div class="nm">Alex Chen</div><div class="em">alex.chen@example.com</div></div></div>
+                <div class="shot-row"><div class="shot-av" style="background:#e2e8f0;color:#64748b">◎</div><div><div class="nm">Use another account</div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button class="is-on">VIEW</button><button>CTRL</button></div>
+            <div class="bwp-seg bwp-zoom"><button>−</button><button class="pct">100%</button><button>+</button></div>
+            <button class="bwp-kb"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        导航行在 <code>bwp-top</code> 卡片<b>下方</b>、页面图像<b>上方</b>。左侧 ‹ › 是浏览器历史前进/后退（不是 ai-critic 的首页返回），
+        右侧 × 关闭当前标签。中间 <code>2 / 3</code> 是历史位置，无可后退/前进时对应按钮置灰。
+      </p>
+    </div>
+
+    <!-- ================= B ================= -->
+    <div class="col">
+      <div class="col-h"><h3>B · 切到 CTRL</h3><span class="tag fix">键盘保持关闭</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>OpenCode Console</span>
+              <span class="bwp-urltext">https://opencode.ai/console/signup?next=%2Fco…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn" title="Back"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn" title="Forward"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+              <span class="bwp-navnote">3 / 3</span>
+            </div>
+            <button class="bwp-dismiss" title="Close this tab"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <div class="bwp-shot">
+            <div class="shot-inner" style="align-items:flex-start;padding-top:14px">
+              <div style="width:82%;text-align:center">
+                <div style="width:34px;height:44px;border-radius:6px;background:#0f172a;margin:0 auto 12px;border:2px solid #334155"></div>
+                <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:12px">Sign up to OpenCode Console</div>
+                <div style="border:1px solid #dbe3ee;border-radius:7px;padding:8px;font-size:9px;color:#475569;margin-bottom:7px">Continue with Google</div>
+                <div style="border:1px solid #dbe3ee;border-radius:7px;padding:8px;font-size:9px;color:#475569">Continue with GitHub</div>
+                <div style="font-size:8.5px;color:#94a3b8;margin:11px 0 8px">Or continue with</div>
+                <div style="text-align:left;font-size:8px;color:#64748b">Email address</div>
+                <div style="border:1px solid #dbe3ee;border-radius:7px;padding:7px;font-size:9px;color:#334155;margin:3px 0 8px">xhd2015@example.com</div>
+                <div style="text-align:left;font-size:8px;color:#64748b">Password</div>
+                <div style="border:1.5px solid #93c5fd;border-radius:7px;padding:7px;font-size:9px;color:#334155;margin-top:3px;display:flex;justify-content:space-between"><span>TiA9piWRfzSnjP9</span><span style="color:#94a3b8">Show</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button class="is-on">CTRL</button></div>
+            <div class="bwp-seg bwp-zoom"><button>−</button><button class="pct">296%</button><button>+</button></div>
+            <button class="bwp-kb" title="Keyboard"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        切 CTRL 后<b>不弹键盘</b>，键盘按钮保持未激活。现在的问题是 <code>keysVisible</code> 初值取
+        <code>matchMedia('(pointer: coarse)')</code>——手机上恒为 true，而键盘只在 <code>lens==='ctrl'</code> 时渲染，
+        于是“切 CTRL”看起来像自动开键盘。<b>改为初值 false、只由 ⌨ 按钮控制</b>即可。
+      </p>
+    </div>
+
+    <!-- ================= C ================= -->
+    <div class="col">
+      <div class="col-h"><h3>C · 一级键盘</h3><span class="tag new">维持简洁 + 一个入口</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>OpenCode Console</span>
+              <span class="bwp-urltext">https://opencode.ai/console/signup?next=%2Fco…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn" title="Back"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn" title="Forward"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+            </div>
+            <button class="bwp-dismiss" title="Close this tab"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <div class="bwp-shot" style="flex:0.55">
+            <div class="shot-inner" style="align-items:flex-start;padding-top:10px">
+              <div style="width:82%;text-align:center">
+                <div style="font-size:10px;font-weight:700;color:#334155;margin-bottom:10px">Sign up to OpenCode Console</div>
+                <div style="border:1px solid #dbe3ee;border-radius:7px;padding:7px;font-size:9px;color:#475569">Continue with Google</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-tray">
+            <div class="kbd">
+              <div class="kbd-input">
+                <div class="fake">Type text for the page…</div>
+                <button>Send</button>
+                <button>✕</button>
+              </div>
+              <div class="kbd-row">
+                <button class="key wide">enter</button>
+                <button class="key">tab</button>
+                <button class="key">esc</button>
+                <button class="key">⌫</button>
+                <button class="key">←</button>
+                <button class="key">↑</button>
+                <button class="key">↓</button>
+                <button class="key">→</button>
+                <button class="key more">⌨ 更多 ▸</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button class="is-on">CTRL</button></div>
+            <div class="bwp-seg bwp-zoom"><button>−</button><button class="pct">296%</button><button>+</button></div>
+            <button class="bwp-kb is-on"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        一级键盘保持现在的样子（输入框 + Send + 8 个键），<b>只新增右侧「⌨ 更多 ▸」</b>进入二级。
+        现有按键顺序和宽度都不变，避免肌肉记忆失效。
+      </p>
+    </div>
+
+    <!-- ================= D ================= -->
+    <div class="col">
+      <div class="col-h"><h3>D · 二级键盘</h3><span class="tag new">修饰键 / 剪贴板 / 快捷键</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stage">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>OpenCode Console</span>
+              <span class="bwp-urltext">https://opencode.ai/console/signup?next=%2Fco…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn" title="Back"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn" title="Forward"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+            </div>
+            <button class="bwp-dismiss" title="Close this tab"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <div class="bwp-shot" style="flex:0.32">
+            <div class="shot-inner" style="align-items:flex-start;padding-top:8px">
+              <div style="width:82%;text-align:center;font-size:9px;color:#64748b">Password field focused</div>
+            </div>
+          </div>
+
+          <div class="bwp-tray">
+            <div class="kbd">
+              <div class="kbd-input">
+                <div class="fake">Type text for the page…</div>
+                <button>Send</button>
+                <button>✕</button>
+              </div>
+
+              <div class="kbd-sep">修饰键 · 可叠加</div>
+              <div class="kbd-row">
+                <button class="key mod is-on">Ctrl</button>
+                <button class="key mod">Alt</button>
+                <button class="key mod">⌘ Cmd</button>
+                <button class="key mod">⇧ Shift</button>
+                <button class="key">⌦ del</button>
+                <button class="key">⌫</button>
+                <button class="key more">▾ 收起</button>
+              </div>
+
+              <div class="kbd-sep">动作</div>
+              <div class="kbd-row">
+                <button class="key act">⧉ Copy</button>
+                <button class="key act">⎘ Paste</button>
+                <button class="key act">☰ Menu</button>
+                <button class="key act">⤢ Select all</button>
+              </div>
+
+              <div class="kbd-sep">常用快捷键</div>
+              <div class="kbd-row">
+                <button class="key">Ctrl-A</button>
+                <button class="key">Ctrl-E</button>
+                <button class="key">Ctrl-C</button>
+                <button class="key">Ctrl-V</button>
+                <button class="key">⌘-A</button>
+                <button class="key">⌘-C</button>
+                <button class="key">⌘-V</button>
+              </div>
+              <div class="kbd-hint">
+                Ctrl / Alt / ⌘ 为<b>粘滞修饰键</b>：点亮后按下一个普通键即组合发送，随后自动熄灭。点亮 Ctrl 时按 A 等于 Ctrl-A。
+              </div>
+            </div>
+          </div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button class="is-on">CTRL</button></div>
+            <div class="bwp-seg bwp-zoom"><button>−</button><button class="pct">296%</button><button>+</button></div>
+            <button class="bwp-kb is-on"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        二级键盘分三段：<b>修饰键</b>（Ctrl / Alt / ⌘ / Shift / ⌦ Delete，粘滞可叠加）、
+        <b>动作</b>（Copy / Paste / 右键菜单 / 全选）、<b>常用快捷键</b>（Ctrl-A/E/C/V、⌘-A/C/V 一键直发）。
+        <code>⌦ del</code> 与 <code>⌫</code> 并存：前者删后面字符（Delete/forward），后者删前面。
+      </p>
+    </div>
+
+  </div>
+
+  <!-- ================= spec ================= -->
+  <div class="spec">
+    <h3>契约变化</h3>
+    <table>
+      <thead><tr><th style="width:26%">层</th><th style="width:37%">现在</th><th>之后</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>GET /api/browser/status</code></td>
+          <td>session / tabs / viewport，无历史信息</td>
+          <td>增 <code>history: {index, count, can_back, can_forward}</code>，供导航行渲染与置灰</td>
+        </tr>
+        <tr>
+          <td><code>POST /api/browser/history</code></td>
+          <td>—</td>
+          <td>新端点，<code>{direction:"back"|"forward"}</code>；内部 <code>Page.getNavigationHistory</code> + <code>navigateToHistoryEntry</code></td>
+        </tr>
+        <tr>
+          <td><code>ClientMessage</code>（ws）</td>
+          <td>tap/down/move/up/wheel/key/text/dialog/preset/mode</td>
+          <td>增 <code>history</code>（方向）、<code>tab_close</code>、<code>clipboard</code>（copy/paste）、<code>context_menu</code>、<code>shortcut</code>（按键组合直发）</td>
+        </tr>
+        <tr>
+          <td><code>BrowserKeys</code></td>
+          <td>8 个固定键 + 输入框</td>
+          <td>一级不变，末尾加「更多」；新增 <code>BrowserKeysMore</code> 二级面板；<code>stickyModifiers</code> 前端状态</td>
+        </tr>
+        <tr>
+          <td><code>BrowserPage</code> keys 初值</td>
+          <td><code>matchMedia('(pointer: coarse)')</code> → 手机上恒 true</td>
+          <td>恒 <code>false</code>，只由 ⌨ 按钮切换</td>
+        </tr>
+        <tr>
+          <td><code>BrowserPhoneTop</code> / 新增 <code>BrowserNavBar</code></td>
+          <td>无导航行</td>
+          <td><code>bwp-top</code> 下方新增一行：‹ › 历史、<code>2 / 3</code> 位置、× 关闭当前标签</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">测试场景</h3>
+    <table>
+      <thead><tr><th style="width:46%">场景</th><th>期望</th></tr></thead>
+      <tbody>
+        <tr><td>历史只有一条时</td><td>‹ 与 › 均置灰</td></tr>
+        <tr><td>列表末尾时</td><td>› 置灰，‹ 可用</td></tr>
+        <tr><td>后退后再前进</td><td>位置计数随之变化，地址栏跟随</td></tr>
+        <tr><td>点 × 关闭当前 tab</td><td>走 <code>Target.closeTarget</code>；只剩一个 tab 时确认或拒绝</td></tr>
+        <tr><td>VIEW → CTRL</td><td>键盘<b>不</b>弹出，⌨ 未激活</td></tr>
+        <tr><td>点亮 Ctrl 后按 A</td><td>发送 <code>{key:"a",modifiers:2}</code>，修饰键随即熄灭</td></tr>
+        <tr><td>点 Ctrl-A 快捷键</td><td>直发 <code>{modifiers:2}</code>，不改动粘滞状态</td></tr>
+        <tr><td>点 Paste</td><td>剪贴板为空时按钮置灰并提示</td></tr>
+        <tr><td>点 Menu</td><td>在页面焦点处派发右键事件</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

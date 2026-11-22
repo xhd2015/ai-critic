@@ -4,6 +4,8 @@ import { BrowserPhoneBottom } from './BrowserPhoneBottom';
 import { useAutoCloseToast } from './useAutoCloseToast';
 import { BrowserPhoneTop } from './BrowserPhoneTop';
 import { BrowserProbeBanner, BrowserPollBadge } from './BrowserTransport';
+import { BrowserNavBar } from './BrowserNavBar';
+import type { ModifierName } from './BrowserKeysMore';
 import { BrowserSheet } from './BrowserSheet';
 import type { SheetView } from './BrowserSheet';
 import { tabLabel } from './browserView';
@@ -16,6 +18,7 @@ import type {
     BrowserMode,
     BrowserTab,
     ConnectionState,
+    HistoryStatus,
     Lens,
     SessionInfo,
 } from './browserWire';
@@ -92,6 +95,17 @@ export interface BrowserPhoneViewProps {
     onKeys: () => void;
     onText: (text: string) => void;
     onKey: (key: string, code: string, vk?: number) => void;
+    /** Browser history, not ai-critic navigation: the tab's own entries. */
+    history?: HistoryStatus;
+    startup?: 'starting' | 'waiting_extension' | 'ready' | 'failed';
+    onHistory: (direction: 'back' | 'forward') => void;
+    onCloseTabCurrent: () => void;
+    /** Send one key with modifiers already resolved (shortcut buttons). */
+    onShortcut: (key: string, code: string, modifiers: ModifierName[]) => void;
+    onKeyWithModifiers: (key: string, code: string, vk: number, modifiers: ModifierName[]) => void;
+    onCopy: () => void;
+    onPaste: (text: string) => void;
+    onContextMenu: () => void;
 }
 
 /**
@@ -133,6 +147,14 @@ export function BrowserPhoneView(props: BrowserPhoneViewProps) {
                 onAddress={() => props.onView('url')}
             />
 
+            <BrowserNavBar
+                history={props.history}
+                disabled={props.readOnly || props.connection !== 'open'}
+                busy={props.startup !== 'ready' && props.startup !== undefined}
+                onStep={props.onHistory}
+                onCloseTab={props.onCloseTabCurrent}
+            />
+
             <BrowserProbeBanner probe={props.probe} onSwitchTransport={props.onSwitchTransport} onRetryWs={props.onRetryWs} />
 
             {props.children}
@@ -144,6 +166,11 @@ export function BrowserPhoneView(props: BrowserPhoneViewProps) {
                         onClose={props.onKeys}
                         onText={props.onText}
                         onKey={props.onKey}
+                        onKeyWithModifiers={props.onKeyWithModifiers}
+                        onShortcut={props.onShortcut}
+                        onCopy={props.onCopy}
+                        onPaste={props.onPaste}
+                        onContextMenu={props.onContextMenu}
                     />
                 </div>
             )}

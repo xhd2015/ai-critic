@@ -19,6 +19,7 @@ func RegisterAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/browser/status", m.handleStatus)
 	mux.HandleFunc("/api/browser/ensure", m.handleEnsure)
 	mux.HandleFunc("/api/browser/navigate", m.handleNavigate)
+	mux.HandleFunc("/api/browser/history", m.handleHistory)
 	mux.HandleFunc("/api/browser/preset", m.handlePreset)
 	mux.HandleFunc("/api/browser/mode", m.handleMode)
 	mux.HandleFunc("/api/browser/refresh", m.handleRefresh)
@@ -40,6 +41,12 @@ func (m *Manager) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// The nav row renders from status, and the tab poll only runs while a viewer
+	// is attached: refresh here so a page opened with nobody watching still
+	// reports its real position.
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	m.refreshHistoryCache(ctx)
+	cancel()
 	writeJSON(w, http.StatusOK, m.Snapshot())
 }
 

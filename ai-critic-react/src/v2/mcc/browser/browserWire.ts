@@ -179,10 +179,20 @@ export interface BrowserStatus {
     /** Tabs of the current session's window; the /go page is included. */
     tabs?: BrowserTab[];
     active_tab_id?: number;
+    /** Where the driven tab sits in its own history; arrows render from this. */
+    history?: HistoryStatus;
     /** Daemon is older than 1.0.20: streaming works, tab controls do not. */
     read_only?: boolean;
     startup?: 'starting' | 'waiting_extension' | 'ready' | 'failed';
     error?: string;
+}
+
+/** The driven tab's navigation position, as /api/browser/status reports it. */
+export interface HistoryStatus {
+    index: number;
+    count: number;
+    can_back: boolean;
+    can_forward: boolean;
 }
 
 /** Frame header: magic, flags, reserved, seq, ts, jpeg length (all big endian). */
@@ -200,6 +210,10 @@ export interface ClientMessage {
     code?: string;
     vk?: number;
     modifiers?: number;
+    /** Shortcut spelling of modifiers: ["ctrl"], ["meta", "shift"]. */
+    modifier_names?: string[];
+    /** "back" | "forward" for the history message. */
+    direction?: string;
     text?: string;
     url?: string;
     preset?: string;

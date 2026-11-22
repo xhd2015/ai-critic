@@ -402,6 +402,75 @@
     min-width: 64px;
 }
 
+/* Second keyboard page: modifiers latch, so a touch screen can compose a
+   combination without holding two keys at once. */
+.bw-key-more {
+    margin-left: auto;
+    font-family: inherit;
+    font-weight: 650;
+    color: #a7c5ff;
+    border-color: #2f4d80;
+}
+
+.bw-key-more.is-on {
+    background: #1b2c46;
+    color: #cfe0ff;
+}
+
+.bw-keymod {
+    font-family: inherit;
+    font-weight: 700;
+}
+
+.bw-keymod.is-on {
+    background: #3b2f10;
+    border-color: #7a5c17;
+    color: #f5d47a;
+}
+
+.bw-keyact {
+    font-family: inherit;
+    font-weight: 650;
+}
+
+.bwp-keysmore {
+    margin-top: 8px;
+    border-top: 1px solid #22262c;
+    padding-top: 6px;
+}
+
+.bwp-keysmore-h {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7d8794;
+    font-weight: 700;
+    margin: 8px 0 0;
+}
+
+.bwp-keysmore-paste {
+    width: 100%;
+    margin-top: 8px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    color: #e6e8eb;
+    padding: 7px 10px;
+    font-size: 13px;
+}
+
+.bwp-keysmore-paste:focus {
+    outline: none;
+    border-color: #388bfd;
+}
+
+.bwp-keysmore-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #7d8794;
+}
+
 /* ------------------------------------------------------------ rail + main */
 
 .bw-main {
@@ -1544,6 +1613,95 @@
         pointer-events: none;
     }
 
+    /* --- nav row: history + close, one line under the address card --- */
+
+    .bwp-nav {
+        position: absolute;
+        /* The address card is 49px tall plus its 7px offset; leave one gap so
+           the two islands never touch when the card grows (long titles). */
+        top: calc(var(--safe-t) + 7px + 51px + 6px);
+        left: 8px;
+        right: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        z-index: 29;
+        transition: opacity 0.18s ease;
+    }
+
+    .bw-phone.is-sheet .bwp-nav {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .bwp-navgrp {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .bwp-navbtn {
+        width: 38px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        background: rgba(10, 14, 20, 0.78);
+        -webkit-backdrop-filter: blur(20px) saturate(150%);
+        backdrop-filter: blur(20px) saturate(150%);
+        color: #dbe4ef;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .bwp-navbtn:disabled {
+        color: #46505e;
+        border-color: rgba(255, 255, 255, 0.05);
+        background: rgba(10, 14, 20, 0.5);
+        cursor: default;
+    }
+
+    .bwp-navbtn:active:not(:disabled) {
+        background: rgba(40, 52, 70, 0.9);
+    }
+
+    .bwp-navnote {
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        color: #8c98a8;
+        padding: 0 2px;
+    }
+
+    .bwp-dismiss {
+        width: 38px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        border-radius: 10px;
+        background: rgba(60, 20, 24, 0.7);
+        -webkit-backdrop-filter: blur(20px) saturate(150%);
+        backdrop-filter: blur(20px) saturate(150%);
+        color: #f8a8a8;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .bwp-dismiss:disabled {
+        color: #5c4646;
+        border-color: rgba(255, 255, 255, 0.05);
+        background: rgba(10, 14, 20, 0.5);
+        cursor: default;
+    }
+
+    .bwp-dismiss:active:not(:disabled) {
+        background: rgba(96, 30, 36, 0.85);
+    }
+
     .bwp-back {
         flex: none;
         width: 31px;
@@ -1785,6 +1943,32 @@
         border: 1px solid rgba(255, 255, 255, 0.09);
         border-radius: 14px;
         box-shadow: 0 18px 44px -16px rgba(0, 0, 0, 0.8);
+        /* The second keyboard page is taller than the first. Cap it so the tray
+           never grows past the picture, and let it scroll instead. */
+        /* vh, not %: the tray is absolutely positioned, so a percentage height
+           resolves against the stage, not the visible window. */
+        max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 76px - 60px - 64px);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .bwp-tray .bw-keys {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        min-height: 0;
+        /* Room to reach the shortcut row without the address card covering it. */
+        padding-bottom: 16px;
+    }
+
+    /* The second page is a real panel: give it the width it needs so the
+       modifier and shortcut rows wrap instead of scrolling sideways. */
+    .bwp-tray .bwp-keysmore .bw-keys-row {
+        flex-wrap: wrap;
+        overflow-x: visible;
+    }
+
+    .bwp-tray .bwp-keysmore .bw-key {
+        min-width: 62px;
     }
 
     .bwp-tray .bw-keys {
