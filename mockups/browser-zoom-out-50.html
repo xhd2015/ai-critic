@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VIEW 缩小到 50% · mockup</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --elev: #334155; --bd: #334155;
+    --text: #f1f5f9; --sec: #94a3b8; --mut: #64748b;
+    --blue: #60a5fa; --green: #22c55e; --yellow: #fbbf24; --red: #f87171;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: #060b16; color: var(--text); }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 26px 20px 80px; }
+  h1 { font-size: 21px; margin: 0 0 6px; }
+  .lead { color: var(--sec); font-size: 13px; margin: 0 0 14px; max-width: 980px; line-height: 1.55; }
+  .assump { font-size: 12px; color: #cbd5e1; background: #0b1220; border: 1px dashed #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 22px; line-height: 1.7; }
+  .assump code, .lead code, .spec code, p code, .caption code { font-family: var(--mono); font-size: 11px; color: #a5b4fc; background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 4px; }
+
+  .frames { display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-start; }
+  .col { width: 422px; flex-shrink: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding-left: 16px; }
+  .col-h h3 { margin: 0; font-size: 14px; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+  .tag.bad { color: #fecaca; background: rgba(239,68,68,.16); border: 1px solid rgba(239,68,68,.4); }
+  .tag.new { color: #bbf7d0; background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.4); }
+
+  .phone {
+    width: 390px; height: 844px; background: #05070a; border-radius: 36px;
+    border: 8px solid #020617; overflow: hidden; display: flex; flex-direction: column;
+    position: relative; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  .caption { font-size: 11.5px; color: var(--mut); margin: 10px 0 0; padding-left: 16px; line-height: 1.6; max-width: 390px; }
+  .caption b { color: #cbd5e1; }
+
+  .hostbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; background: #0b1220; flex-shrink: 0; }
+  .hostbar .lbl { font-size: 11px; color: var(--mut); font-family: var(--mono); }
+  .hostbar .pill { flex: 1; background: #111a2e; border-radius: 999px; padding: 5px 12px; font-size: 11px; color: #93c5fd; text-align: center; }
+
+  .stagearea { flex: 1; position: relative; min-height: 0; background-color: #05070a;
+               background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+               background-size: 22px 22px; }
+
+  /* top card */
+  .bwp-top { position: absolute; top: 7px; left: 8px; right: 8px; height: 49px;
+    display: flex; align-items: center; gap: 2px; padding: 0 6px 0 4px;
+    background: rgba(10,14,20,.78); border: 1px solid rgba(255,255,255,.075);
+    border-radius: 14px; z-index: 30; }
+  .bwp-icon { width: 30px; height: 33px; display: grid; place-items: center; border: 0; background: none; color: #aab6c6; }
+  .bwp-title { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: inherit; padding: 0 2px; }
+  .bwp-sess { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bwp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow); flex-shrink: 0; }
+  .bwp-urltext { display: block; font-size: 10.5px; color: var(--mut); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .bwp-urlcap { width: 30px; height: 30px; border: 0; background: transparent; color: #93c5fd; display: grid; place-items: center; }
+
+  /* nav row */
+  .bwp-nav { position: absolute; top: 64px; left: 8px; right: 8px; display: flex; align-items: center; justify-content: space-between; z-index: 29; }
+  .bwp-navgrp { display: flex; align-items: center; gap: 6px; }
+  .bwp-navbtn { width: 38px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px; background: rgba(10,14,20,.78); color: #dbe4ef; }
+  .bwp-navbtn[disabled] { color: #46505e; border-color: rgba(255,255,255,.05); background: rgba(10,14,20,.5); }
+  .bwp-navnote { font-size: 11px; font-variant-numeric: tabular-nums; color: #8c98a8; padding: 0 2px; }
+  .bwp-dismiss { width: 38px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(248,113,113,.4);
+    border-radius: 10px; background: rgba(60,20,24,.7); color: #f8a8a8; }
+
+  /* the picture, scaled */
+  .shot { position: absolute; background: #fff; border-radius: 2px; overflow: hidden;
+          box-shadow: 0 8px 26px rgba(0,0,0,.55); }
+  .shot-in { padding: 10px 12px; font-size: 7px; color: #334155; line-height: 1.5; }
+  .shot-in .h { font-weight: 700; font-size: 8px; margin-bottom: 4px; color: #0f172a; }
+  .shot-line { display: flex; gap: 4px; margin-bottom: 2px; }
+  .shot-line i { width: 5px; height: 5px; border-radius: 50%; background: #cbd5e1; flex: none; margin-top: 1px; }
+  .shot-line span { background: #eef2f7; border-radius: 2px; height: 5px; flex: 1; }
+
+  /* bottom bar */
+  .bwp-bottom { position: absolute; bottom: 8px; left: 8px; right: 8px; height: 52px;
+    display: flex; align-items: center; gap: 7px; padding: 0 7px;
+    background: rgba(10,14,20,.78); border: 1px solid rgba(255,255,255,.075);
+    border-radius: 15px; z-index: 30; }
+  .bwp-seg { display: flex; background: #111a2e; border: 1px solid #334155; border-radius: 10px; padding: 2px; }
+  .bwp-seg button { border: 0; background: transparent; color: var(--mut); font-size: 10.5px; font-weight: 800;
+    letter-spacing: .05em; padding: 6px 11px; border-radius: 8px; font-family: var(--font); }
+  .bwp-seg button.is-on { background: #334155; color: #f1f5f9; }
+  .bwp-zoom { margin-left: auto; align-items: center; }
+  .bwp-zoom button { padding: 6px 9px; font-size: 12px; font-weight: 600; letter-spacing: 0; }
+  .bwp-zoom button[disabled] { color: #3f4a5a; }
+  .bwp-zoom .pct { font-family: var(--mono); font-size: 11px; color: var(--sec); }
+  .bwp-kb { width: 34px; height: 30px; border: 1px solid #334155; background: #111a2e; color: var(--sec);
+    border-radius: 9px; display: grid; place-items: center; margin-left: 6px; }
+
+  /* annotations */
+  .pop { position: absolute; z-index: 40; font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    background: rgba(59,130,246,.92); color: #fff; white-space: nowrap; }
+  .pop.warn { background: rgba(239,68,68,.92); }
+  .pop.ok { background: rgba(34,197,94,.92); }
+  .ring { position: absolute; border-radius: 12px; border: 2px dashed rgba(96,165,250,.85); z-index: 35; pointer-events: none; }
+  .ring.bad { border-color: rgba(248,113,113,.9); }
+
+  /* ladder */
+  .ladder { margin-top: 40px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 18px 20px; max-width: 1200px; }
+  .ladder h3 { margin: 0 0 4px; font-size: 14px; }
+  .ladder p { margin: 0 0 16px; font-size: 12px; color: var(--mut); line-height: 1.6; }
+  .detents { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+  .detent { min-width: 62px; text-align: center; font-family: var(--mono); font-size: 11px; padding: 7px 4px;
+    border-radius: 8px; border: 1px solid #334155; background: #16233a; color: #cbd5e1; }
+  .detent.added { border-color: rgba(34,197,94,.55); background: rgba(34,197,94,.12); color: #bbf7d0; }
+  .detent.floor { border-color: rgba(96,165,250,.6); background: rgba(96,165,250,.14); color: #bfdbfe; font-weight: 700; }
+  .detent.old { border-color: rgba(248,113,113,.5); background: rgba(248,113,113,.1); color: #fecaca; }
+  .ladder .note { font-size: 11px; color: #64748b; margin-top: 12px; line-height: 1.6; }
+
+  .spec { margin-top: 40px; background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; padding: 16px 18px; max-width: 1200px; }
+  .spec h3 { margin: 0 0 10px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+  th { color: var(--sec); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; }
+  td code { font-family: var(--mono); font-size: 10.5px; color: #a5b4fc; }
+  tr:last-child td { border-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>VIEW：把缩小下限从 100% 放到 50%</h1>
+  <p class="lead">
+    现在 <code>−</code> 在 100% 就灰掉了，因为缩放下限是 1（等于 fit）。三帧：A 现状（100% 是硬底）、
+    B 新增的 75%、C 新下限 50%。下方还有档位阶梯与改动点。
+  </p>
+  <div class="assump">
+    <b>根因（已核实，非猜测）：</b><br />
+    <code>ai-critic-react/src/v2/mcc/screen/viewport.ts:11</code> → <code>MIN_ZOOM = 1</code>，而 <code>clampZoom()</code> 把
+    zoom 夹在 <code>[MIN_ZOOM, MAX_ZOOM]</code>。<code>phoneZoom.ts</code> 的档位 <code>PHONE_ZOOMS = [1, 1.25, …]</code> 也从 1 起，
+    所以 <code>prevPhoneZoom(1)</code> 返回 <code>null</code> → <code>−</code> 置灰。<br />
+    <b>已确认可行：</b><code>clampView()</code> 在图像小于舞台时会把两轴都居中（<code>half*2 >= img</code> 分支），
+    所以 zoom&lt;1 时图片自然居中、无黑边偏移，transform 数学不需要改。
+  </div>
+
+  <div class="frames">
+
+    <!-- ============ A: 现状 ============ -->
+    <div class="col">
+      <div class="col-h"><h3>A · 现状 100%</h3><span class="tag bad">− 已到下限</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stagearea">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>Messages tab — DSH Local Build</span>
+              <span class="bwp-urltext">http://127.0.0.1:3080/?session=session-67b0df…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+              <span class="bwp-navnote">1 / 2</span>
+            </div>
+            <button class="bwp-dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <!-- 100%: fits the stage width exactly -->
+          <div class="shot" style="left:10px; right:10px; top:150px; height:250px;">
+            <div class="shot-in">
+              <div class="h">Messages tab <span style="color:#94a3b8;font-weight:400">· Standard (No Subagent)</span></div>
+              <div class="shot-line"><i></i><span></span></div>
+              <div class="shot-line"><i></i><span style="flex:.9"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.75"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.95"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.6"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.85"></span></div>
+              <div style="margin-top:6px;height:14px;background:#eef2f7;border-radius:3px"></div>
+            </div>
+          </div>
+
+          <div class="pop warn" style="left:16px; top:412px;">− 在此灰掉 · 无法再缩小</div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button>CTRL</button></div>
+            <div class="bwp-seg bwp-zoom">
+              <button disabled>−</button><button class="pct">100%</button><button>+</button>
+            </div>
+            <button class="bwp-kb"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        100% 就是 fit：图片宽度正好等于舞台宽度。<code>prevPhoneZoom(1)</code> 返回 <code>null</code>，
+        所以 <code>−</code> 用 <code>disabled</code> 渲染 —— 这就是你截图里点不动的原因。
+      </p>
+    </div>
+
+    <!-- ============ B: 75% ============ -->
+    <div class="col">
+      <div class="col-h"><h3>B · 75%（新增档位）</h3><span class="tag new">− 可用</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stagearea">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>Messages tab — DSH Local Build</span>
+              <span class="bwp-urltext">http://127.0.0.1:3080/?session=session-67b0df…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+              <span class="bwp-navnote">1 / 2</span>
+            </div>
+            <button class="bwp-dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <!-- 75%: 75% of the 100% width, centred -->
+          <div class="shot" style="left:56px; right:56px; top:190px; height:190px;">
+            <div class="shot-in" style="transform:scale(.92);transform-origin:top left;">
+              <div class="h">Messages tab</div>
+              <div class="shot-line"><i></i><span></span></div>
+              <div class="shot-line"><i></i><span style="flex:.9"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.75"></span></div>
+              <div class="shot-line"><i></i><span style="flex:.95"></span></div>
+              <div style="margin-top:6px;height:12px;background:#eef2f7;border-radius:3px"></div>
+            </div>
+          </div>
+
+          <div class="pop ok" style="left:16px; top:398px;">− 可用 · 50% 之前都能缩</div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button>CTRL</button></div>
+            <div class="bwp-seg bwp-zoom">
+              <button>−</button><button class="pct">75%</button><button>+</button>
+            </div>
+            <button class="bwp-kb"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        75% 时图片比舞台窄，<b>两轴都居中</b>（<code>clampView</code> 已有的行为），四周是原本的点阵背景。
+        此时拖动不生效——图片比视口小，没有可平移的余量。
+      </p>
+    </div>
+
+    <!-- ============ C: 50% ============ -->
+    <div class="col">
+      <div class="col-h"><h3>C · 50%（新下限）</h3><span class="tag new">− 再次置灰</span></div>
+      <div class="phone">
+        <div class="hostbar"><span class="lbl">◀</span><span class="pill">mac-agent-via-rsp-aes42.xhd2015.xyz</span><span class="lbl">↻</span></div>
+        <div class="stagearea">
+          <div class="bwp-top">
+            <button class="bwp-icon"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 8 12l6.5 7"/></svg></button>
+            <button class="bwp-title">
+              <span class="bwp-sess"><i class="bwp-dot"></i>Messages tab — DSH Local Build</span>
+              <span class="bwp-urltext">http://127.0.0.1:3080/?session=session-67b0df…</span>
+            </button>
+            <button class="bwp-urlcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>
+          </div>
+          <div class="bwp-nav">
+            <div class="bwp-navgrp">
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button>
+              <button class="bwp-navbtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+              <span class="bwp-navnote">1 / 2</span>
+            </div>
+            <button class="bwp-dismiss"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+
+          <!-- 50%: half width, centred -->
+          <div class="shot" style="left:101px; right:101px; top:270px; height:120px;">
+            <div class="shot-in" style="transform:scale(.8);transform-origin:top left;">
+              <div class="h">Messages tab</div>
+              <div class="shot-line"><i></i><span></span></div>
+              <div class="shot-line"><i></i><span style="flex:.8"></span></div>
+              <div style="margin-top:4px;height:8px;background:#eef2f7;border-radius:2px"></div>
+            </div>
+          </div>
+
+          <div class="pop" style="left:16px; top:404px;">50% = 新下限，− 再次置灰</div>
+
+          <div class="bwp-bottom">
+            <div class="bwp-seg"><button>VIEW</button><button>CTRL</button></div>
+            <div class="bwp-seg bwp-zoom">
+              <button disabled>−</button><button class="pct">50%</button><button>+</button>
+            </div>
+            <button class="bwp-kb"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M8 14h8"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">
+        50% 时图片只有舞台一半宽，居中显示。点 <code>50%</code> 这个数字仍然是 <b>Fit</b>（回到 100%），
+        行为不变——所以缩到最小后一键就能回到原位。
+      </p>
+    </div>
+
+  </div>
+
+  <!-- ============ ladder ============ -->
+  <div class="ladder">
+    <h3>档位阶梯</h3>
+    <p><code>PHONE_ZOOMS</code> 新增两个低于 1 的档位；<code>−</code>/<code>+</code> 按档位跳，捏合仍连续。</p>
+    <div class="detents">
+      <div class="detent floor">50%<br><span style="font-size:9px;opacity:.8">新下限</span></div>
+      <div class="detent added">75%<br><span style="font-size:9px;opacity:.8">新增</span></div>
+      <div class="detent old">100%<br><span style="font-size:9px;opacity:.8">原下限</span></div>
+      <div class="detent">125%</div>
+      <div class="detent">150%</div>
+      <div class="detent">200%</div>
+      <div class="detent">250%</div>
+      <div class="detent">300%</div>
+      <div class="detent">400%</div>
+      <div class="detent">600%</div>
+    </div>
+    <div class="note">
+      为什么加 75%：从 100% 直接跳到 50% 步子太大，中间档位让"稍微退一点看全貌"可行。
+      如果你只想要两端，去掉 0.75 即可，不影响其它逻辑。
+    </div>
+  </div>
+
+  <!-- ============ spec ============ -->
+  <div class="spec">
+    <h3>改动点（before → after）</h3>
+    <table>
+      <thead><tr><th style="width:30%">层</th><th style="width:32%">现在</th><th>之后</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>mcc/screen/viewport.ts</code></td>
+          <td><code>MIN_ZOOM = 1</code>；<code>clampZoom()</code> 夹到 <code>[1, 6]</code></td>
+          <td>下限参数化：<code>clampZoom(zoom, min = MIN_ZOOM)</code>；浏览器侧传 <code>0.5</code>。<b>Screen 页行为不变</b></td>
+        </tr>
+        <tr>
+          <td><code>viewport.ts</code> 的 <code>clampView / zoomAt / scaleOf</code></td>
+          <td>内部各自调 <code>clampZoom(view.zoom)</code>，无法低于 1</td>
+          <td>同样接收可选 <code>min</code> 并透传；默认值保持 1，故 <code>RemoteScreen</code> 一行不改也不受影响</td>
+        </tr>
+        <tr>
+          <td><code>browser/phoneZoom.ts</code></td>
+          <td><code>PHONE_ZOOMS = [1, 1.25, 1.5, 2, 2.5, 3, 4, 6]</code></td>
+          <td><code>[0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 6]</code></td>
+        </tr>
+        <tr>
+          <td><code>browser/browserView.ts</code> <code>transformOf / settleView</code></td>
+          <td>调 <code>clampView(g, view)</code>，会把 0.5 夹回 1</td>
+          <td>传浏览器下限，否则"已缩到 50% 但画面仍是 100%"</td>
+        </tr>
+        <tr>
+          <td><code>browser/useBrowserZoom.ts</code>（捏合 / 双击）</td>
+          <td><code>clampZoom(target)</code></td>
+          <td>传同一下限，捏合也能到 50%；双击仍是"在 fit 与 2x 之间切换"</td>
+        </tr>
+        <tr>
+          <td><code>browser/browserZoomPad.ts</code>（触控板）</td>
+          <td><code>clampZoom(view.zoom * ratio)</code></td>
+          <td>同上</td>
+        </tr>
+        <tr>
+          <td><code>−</code> 按钮禁用条件</td>
+          <td><code>prevPhoneZoom(zoom) !== null</code>；100% 时为 null</td>
+          <td>逻辑不变；档位表加入 0.5/0.75 后，只有 50% 时为 null</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">测试场景</h3>
+    <table>
+      <thead><tr><th style="width:48%">场景</th><th>期望</th></tr></thead>
+      <tbody>
+        <tr><td>100% 时点 <code>−</code></td><td>降到 75%，按钮仍可用</td></tr>
+        <tr><td>75% 时点 <code>−</code></td><td>降到 50%，按钮转为 disabled</td></tr>
+        <tr><td>50% 时点 <code>+</code></td><td>回到 75%</td></tr>
+        <tr><td>任意缩放下点百分比数字</td><td>回到 100%（Fit），与现在一致</td></tr>
+        <tr><td>捏合到 40%</td><td>夹到 50%，不越界</td></tr>
+        <tr><td>50% 时拖动</td><td>画面保持居中，不产生黑边漂移</td></tr>
+        <tr><td>50% 时点击</td><td>坐标经 <code>screenToStream</code> 正确映射（除以 k）</td></tr>
+        <tr><td>Screen 页（RemoteScreen）</td><td><b>下限仍是 100%</b>，不受影响</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:20px">怎么测</h3>
+    <table>
+      <thead><tr><th style="width:48%">命令</th><th>覆盖</th></tr></thead>
+      <tbody>
+        <tr><td><code>npm run test:browser</code></td><td>档位序列、<code>prev/nextPhoneZoom</code> 边界、百分比文案</td></tr>
+        <tr><td><code>npx tsc -b</code></td><td>新增可选参数不破坏 <code>RemoteScreen</code> 调用</td></tr>
+        <tr><td>真机一次 <code>−</code>×2 → <code>+</code>×1</td><td>100→75→50→75，画面居中且点击坐标正确</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -4,7 +4,7 @@
  * Pinch and double-tap stay continuous; the buttons snap so 100%, 150%, 200%
  * are always one press away instead of drifting by a multiplicative step.
  */
-export const PHONE_ZOOMS = [1, 1.25, 1.5, 2, 2.5, 3, 4, 6] as const;
+export const PHONE_ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 6] as const;
 
 /** Tolerance for float zoom values that came from a pinch. */
 const EPS = 0.001;
@@ -14,7 +14,7 @@ export function nextPhoneZoom(zoom: number): number | null {
     return PHONE_ZOOMS.find((value) => value > zoom + EPS) ?? null;
 }
 
-/** The previous detent below `zoom`, or null when already fitted. */
+/** The previous detent below `zoom`, or null when already at the smallest. */
 export function prevPhoneZoom(zoom: number): number | null {
     for (let i = PHONE_ZOOMS.length - 1; i >= 0; i -= 1) {
         if (PHONE_ZOOMS[i] < zoom - EPS) return PHONE_ZOOMS[i];

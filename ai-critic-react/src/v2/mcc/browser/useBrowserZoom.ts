@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { DOUBLE_TAP_ZOOM, ZOOM_STEP, clampZoom, panBy, screenToStream, zoomAt } from '../screen/viewport';
+import { BROWSER_MIN_ZOOM, DOUBLE_TAP_ZOOM, ZOOM_STEP, clampZoom, panBy, screenToStream, zoomAt } from '../screen/viewport';
 import type { Point, ViewGeometry, Viewport } from '../screen/viewport';
 import { emptyGeometry, geometryOf, resetView, settleView, transformOf } from './browserView';
 import type { ViewTransform } from './browserView';
@@ -79,7 +79,7 @@ export function useBrowserZoom(): BrowserZoom {
         const view = store.current.view;
         const stageCentre = { x: geometry.stageW / 2, y: geometry.stageH / 2 };
         const anchorImage = screenToStream(geometry, view, anchor ?? stageCentre);
-        setView(zoomAt(geometry, view, clampZoom(target), anchorImage));
+        setView(zoomAt(geometry, view, clampZoom(target, BROWSER_MIN_ZOOM), anchorImage, BROWSER_MIN_ZOOM));
     };
 
     const step = (direction: 1 | -1) => {
@@ -89,11 +89,12 @@ export function useBrowserZoom(): BrowserZoom {
 
     const toggleAt = (anchor: Point) => {
         const view = store.current.view;
+        // Double tap keeps its two states: back to fit, or into a magnified view.
         zoomTo(view.zoom > 1.05 ? 1 : DOUBLE_TAP_ZOOM, anchor);
     };
 
     const pan = (dxScreen: number, dyScreen: number) => {
-        setView(panBy(store.current.geometry, store.current.view, dxScreen, dyScreen));
+        setView(panBy(store.current.geometry, store.current.view, dxScreen, dyScreen, BROWSER_MIN_ZOOM));
     };
 
     // The stage changes size on rotation, drawer open/close and toolbar wrap;

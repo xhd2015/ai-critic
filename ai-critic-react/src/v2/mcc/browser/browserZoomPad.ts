@@ -1,4 +1,4 @@
-import { clampZoom, panBy, screenToStream, zoomAt } from '../screen/viewport';
+import { BROWSER_MIN_ZOOM, clampZoom, panBy, screenToStream, zoomAt } from '../screen/viewport';
 import type { Point, ViewGeometry, Viewport } from '../screen/viewport';
 
 /** A press shorter than this that did not move is a tap. */
@@ -126,13 +126,13 @@ export class BrowserZoomPad {
             if (!this.pinch.d || !spread) return;
             const mid = midpoint(a, b);
             const anchor = screenToStream(geometry, this.pinch.view, this.pinch.m);
-            const target = clampZoom(this.pinch.view.zoom * (spread / this.pinch.d));
-            const zoomed = zoomAt(geometry, this.pinch.view, target, anchor);
-            this.host.setView(panBy(geometry, zoomed, mid.x - this.pinch.m.x, mid.y - this.pinch.m.y));
+            const target = clampZoom(this.pinch.view.zoom * (spread / this.pinch.d), BROWSER_MIN_ZOOM);
+            const zoomed = zoomAt(geometry, this.pinch.view, target, anchor, BROWSER_MIN_ZOOM);
+            this.host.setView(panBy(geometry, zoomed, mid.x - this.pinch.m.x, mid.y - this.pinch.m.y, BROWSER_MIN_ZOOM));
             return;
         }
         if (!this.pan) return;
-        this.host.setView(panBy(geometry, this.pan.view, point.x - this.pan.p.x, point.y - this.pan.p.y));
+        this.host.setView(panBy(geometry, this.pan.view, point.x - this.pan.p.x, point.y - this.pan.p.y, BROWSER_MIN_ZOOM));
     };
 
     private onPointerUp = (event: PointerEvent) => {

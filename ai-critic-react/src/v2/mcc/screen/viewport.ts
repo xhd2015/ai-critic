@@ -10,6 +10,15 @@
 
 export const MIN_ZOOM = 1;
 export const MAX_ZOOM = 6;
+/**
+ * The lowest zoom the browser viewer offers: 50% of fit.
+ *
+ * It is a separate floor rather than a new MIN_ZOOM because this module is
+ * shared with the remote screen page, where "smaller than fit" has no meaning
+ * and would silently become a new capability. Every function that clamps takes
+ * an optional floor that defaults to MIN_ZOOM, so that page is unchanged.
+ */
+export const BROWSER_MIN_ZOOM = 0.5;
 /** One tap on ＋ / − changes the zoom by this factor. */
 export const ZOOM_STEP = 1.5;
 /** Double tap toggles between MIN_ZOOM and this. */
@@ -69,13 +78,13 @@ function clamp(value: number, lo: number, hi: number) {
     return Math.min(hi, Math.max(lo, value));
 }
 
-export function clampZoom(zoom: number): number {
-    if (!Number.isFinite(zoom)) return MIN_ZOOM;
-    return clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+export function clampZoom(zoom: number, floor: number = MIN_ZOOM): number {
+    if (!Number.isFinite(zoom)) return floor;
+    return clamp(zoom, floor, MAX_ZOOM);
 }
 
-export function isZoomed(view: Viewport): boolean {
-    return view.zoom > MIN_ZOOM + 1e-3;
+export function isZoomed(view: Viewport, floor: number = MIN_ZOOM): boolean {
+    return view.zoom > floor + 1e-3;
 }
 
 export function fitOf(g: ViewGeometry): Fit {
@@ -89,21 +98,21 @@ export function fitOf(g: ViewGeometry): Fit {
 }
 
 /** Screen (CSS) pixels per image pixel at the current view. */
-export function scaleOf(g: ViewGeometry, view: Viewport): number {
-    return fitOf(g).scale * clampZoom(view.zoom);
+export function scaleOf(g: ViewGeometry, view: Viewport, floor: number = MIN_ZOOM): number {
+    return fitOf(g).scale * clampZoom(view.zoom, floor);
 }
 
-export function centreView(g: ViewGeometry): Viewport {
-    return { zoom: MIN_ZOOM, cx: g.imgW / 2, cy: g.imgH / 2 };
+export function centreView(g: ViewGeometry, floor: number = MIN_ZOOM): Viewport {
+    return { zoom: floor, cx: g.imgW / 2, cy: g.imgH / 2 };
 }
 
 /**
  * Pulls the centre back inside the image so no empty band is ever shown, and
  * re-centres an axis the image is too small to fill (the letterboxed axis).
  */
-export function clampView(g: ViewGeometry, view: Viewport): Viewport {
-    const zoom = clampZoom(view.zoom);
-    const k = scaleOf(g, { ...view, zoom });
+export function clampView(g: ViewGeometry, view: Viewport, floor: number = MIN_ZOOM): Viewport {
+    const zoom = clampZoom(view.zoom, floor);
+    const k = scaleOf(g, { ...view, zoom }, floor);
     const cx = Number.isFinite(view.cx) ? view.cx : g.imgW / 2;
     const cy = Number.isFinite(view.cy) ? view.cy : g.imgH / 2;
     if (!k) return { zoom, cx: g.imgW / 2, cy: g.imgH / 2 };
@@ -121,22 +130,22 @@ export function clampView(g: ViewGeometry, view: Viewport): Viewport {
  * on screen — that is what makes a pinch feel like it is grabbing the picture
  * rather than the viewport.
  */
-export function zoomAt(g: ViewGeometry, view: Viewport, zoom: number, anchor: Point): Viewport {
-    const next = clampZoom(zoom);
-    const k0 = scaleOf(g, view);
-    const k1 = scaleOf(g, { ...view, zoom: next });
-    if (!k0 || !k1) return clampView(g, { ...view, zoom: next });
+export function zoomAt(g: ViewGeometry, view: Viewport, zoom: number, anchor: Point, floor: number = MIN_ZOOM): Viewport {
+    const next = clampZoom(zoom, floor);
+    const k0 = scaleOf(g, view, floor);
+    const k1 = scaleOf(g, { ...view, zoom: next }, floor);
+    if (!k0 || !k1) return clampView(g, { ...view, zoom: next }, floor);
     const ratio = k0 / k1;
     const cx = anchor.x - (anchor.x - view.cx) * ratio;
     const cy = anchor.y - (anchor.y - view.cy) * ratio;
-    return clampView(g, { zoom: next, cx, cy });
+    return clampView(g, { zoom: next, cx, cy }, floor);
 }
 
 /** Drags the picture with the finger: content follows the pointer. */
-export function panBy(g: ViewGeometry, view: Viewport, dxScreen: number, dyScreen: number): Viewport {
-    const k = scaleOf(g, view);
+export function panBy(g: ViewGeometry, view: Viewport, dxScreen: number, dyScreen: number, floor: number = MIN_ZOOM): Viewport {
+    const k = scaleOf(g, view, floor);
     if (!k) return view;
-    return clampView(g, { ...view, cx: view.cx - dxScreen / k, cy: view.cy - dyScreen / k });
+    return clampView(g, { ...view, cx: view.cx - dxScreen / k, cy: view.cy - dyScreen / k }, floor);
 }
 
 export function screenToStream(g: ViewGeometry, view: Viewport, screen: Point): Point {
@@ -203,11 +212,11 @@ export function drawRectOf(g: ViewGeometry, view: Viewport): DrawRect {
 }
 
 /** Next zoom level for a ＋ / − tap. */
-export function stepZoom(zoom: number, direction: 1 | -1): number {
-    return clampZoom(direction > 0 ? zoom * ZOOM_STEP : zoom / ZOOM_STEP);
+export function stepZoom(zoom: number, direction: 1 | -1, floor: number = MIN_ZOOM): number {
+    return clampZoom(direction > 0 ? zoom * ZOOM_STEP : zoom / ZOOM_STEP, floor);
 }
 
 /** Double tap: snap back to fit, or into a comfortable magnified view. */
-export function toggleZoom(zoom: number): number {
-    return zoom > MIN_ZOOM + 1e-3 ? MIN_ZOOM : DOUBLE_TAP_ZOOM;
+export function toggleZoom(zoom: number, floor: number = MIN_ZOOM): number {
+    return zoom > floor + 1e-3 ? floor : DOUBLE_TAP_ZOOM;
 }

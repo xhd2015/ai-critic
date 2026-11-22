@@ -1,4 +1,4 @@
-import { centreView, clampView, scaleOf, screenToStream } from '../screen/viewport.ts';
+import { BROWSER_MIN_ZOOM, centreView, clampView, scaleOf, screenToStream } from '../screen/viewport.ts';
 import type { Point, ViewGeometry, Viewport } from '../screen/viewport.ts';
 import type { BrowserTab } from './browserWire';
 
@@ -51,12 +51,18 @@ export function localPoint(rect: RectLike, clientX: number, clientY: number): Po
  * that, which puts `(cx,cy)` on the stage centre.
  */
 export function transformOf(g: ViewGeometry, view: Viewport): ViewTransform {
-    const settled = clampView(g, view);
-    const k = scaleOf(g, settled);
+    // The browser floor, not the shared MIN_ZOOM: otherwise a 50% view would be
+    // clamped back to 100% here and the picture would never actually shrink.
+    const settled = clampView(g, view, BROWSER_MIN_ZOOM);
+    const k = scaleOf(g, settled, BROWSER_MIN_ZOOM);
     if (!k) return { tx: 0, ty: 0, scale: 1 };
+    const tx = -(settled.cx - g.imgW / 2) * k;
+    const ty = -(settled.cy - g.imgH / 2) * k;
     return {
-        tx: -(settled.cx - g.imgW / 2) * k,
-        ty: -(settled.cy - g.imgH / 2) * k,
+        // Normalise -0: a centred picture multiplies zero by k, and -0 makes
+        // downstream equality checks read as "moved" when nothing moved.
+        tx: tx === 0 ? 0 : tx,
+        ty: ty === 0 ? 0 : ty,
         scale: settled.zoom,
     };
 }
@@ -76,7 +82,7 @@ export function transformStyle(t: ViewTransform): string {
  */
 export function normalizeAt(g: ViewGeometry, view: Viewport, local: Point): Point {
     if (!hasGeometry(g)) return { x: 0.5, y: 0.5 };
-    const p = screenToStream(g, clampView(g, view), local);
+    const p = screenToStream(g, clampView(g, view, BROWSER_MIN_ZOOM), local);
     return {
         x: Math.min(1, Math.max(0, p.x / g.imgW)),
         y: Math.min(1, Math.max(0, p.y / g.imgH)),
@@ -85,22 +91,27 @@ export function normalizeAt(g: ViewGeometry, view: Viewport, local: Point): Poin
 
 /** Normalized [0,1] back to the stage point where it paints. */
 export function screenAt(g: ViewGeometry, view: Viewport, normalized: Point): Point {
-    const settled = clampView(g, view);
-    const k = scaleOf(g, settled);
+    const settled = clampView(g, view, BROWSER_MIN_ZOOM);
+    const k = scaleOf(g, settled, BROWSER_MIN_ZOOM);
     return {
         x: g.stageW / 2 + (normalized.x * g.imgW - settled.cx) * k,
         y: g.stageH / 2 + (normalized.y * g.imgH - settled.cy) * k,
     };
 }
 
-/** A fresh 1× view centred on the picture. */
+/**
+ * A fresh 1x view centred on the picture.
+ *
+ * "Fit" is 100%, not the floor: the `%` button and every reset must land on the
+ * whole page at fit, which is what the centreView default means.
+ */
 export function resetView(g: ViewGeometry): Viewport {
     return hasGeometry(g) ? centreView(g) : { zoom: 1, cx: 0, cy: 0 };
 }
 
 /** Re-clamps after the stage or the frame size changed. */
 export function settleView(g: ViewGeometry, view: Viewport): Viewport {
-    return hasGeometry(g) ? clampView(g, view) : view;
+    return hasGeometry(g) ? clampView(g, view, BROWSER_MIN_ZOOM) : view;
 }
 
 /**
