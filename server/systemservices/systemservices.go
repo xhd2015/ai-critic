@@ -201,8 +201,19 @@ func mergeClientStatus(runtime *services.SystemRuntime, serverAutoStart bool) {
 		}
 	}
 	runtime.Detail += fmt.Sprintf(" · %d/%d clients", live, len(clients))
-	if len(parts) > 0 {
+	if live > 0 {
 		runtime.Detail += " " + strings.Join(parts, ", ")
+		// A consumer-only host has no serving instances, so the client half is
+		// the only reason the service is up; report it as running.
+		runtime.Running = true
+		if runtime.Port == 0 {
+			for _, c := range clients {
+				if c.Running {
+					runtime.Port = c.HTTPPort
+					break
+				}
+			}
+		}
 	} else {
 		runtime.Detail += " not running"
 	}
