@@ -108,6 +108,18 @@ func (p *windowsPayload) windowForSession(sessionID string) *windowSnapshot {
 // through anchor (a live session) because the extension only answers sessions
 // that have a registered /go page; the answer describes every Chrome window in
 // that extension's profile, not only the anchor's window.
+// windowsForProbe lists windows for a best-effort check. It prefers the
+// instance channel so a probe still works once every /go page is gone, which is
+// exactly when a caller needs to know whether its target disappeared.
+func (m *Manager) windowsForProbe(ctx context.Context, anchor string) (*windowsPayload, error) {
+	if m.directSupportedValue() {
+		if payload, err := m.d.windowsDirect(ctx); err == nil {
+			return payload, nil
+		}
+	}
+	return m.fetchWindows(ctx, anchor)
+}
+
 func (m *Manager) fetchWindows(ctx context.Context, anchor string) (*windowsPayload, error) {
 	data, err := m.jobIn(ctx, anchor, 0, "windows", nil, 8*time.Second)
 	if err != nil {

@@ -164,6 +164,46 @@ func TestCloseWindowNeedsCloseCapableAnchor(t *testing.T) {
 	}
 }
 
+// Closing must not need a /go page anywhere: the instance channel addresses the
+// window directly. This is the state auto-close used to leave behind — every
+// window carrying a session page, none of them a usable close anchor.
+func TestCloseWindowClosesOverDirectChannelWithNoSessionPage(t *testing.T) {
+	open := []windowSnapshot{
+		{WindowID: 900, Type: "normal", SessionIDs: []string{"s1"}, Title: "A",
+			Tabs: []windowTab{{TabID: 901, URL: "https://a.example/", Role: "user"}}},
+		{WindowID: 910, Type: "normal", SessionIDs: []string{"s2"}, Title: "B",
+			Tabs: []windowTab{{TabID: 911, URL: "https://b.example/", Role: "user"}}},
+	}
+	// No session has a registered page: rows report zero, so no anchor exists.
+	rows := []sessionRow{
+		{SessionID: "s1", Extension: extensionInfo{Connected: false, Version: "1.0.30"}},
+		{SessionID: "s2", Extension: extensionInfo{Connected: false, Version: "1.0.30"}},
+	}
+	f := closeFake(rows, open...)
+	f.direct = true
+	f.windowsPayload = closePayload(open...)
+	m := newCloseManager(t, f)
+	m.sessionID = "s1"
+	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.30", DirectSupported: true})
+
+	if _, err := m.CloseWindow(context.Background(), 910, ""); err != nil {
+		t.Fatalf("CloseWindow: %v", err)
+	}
+	direct := m.d.(*fakeClient).directCalls
+	if len(direct) != 1 || direct[0].Type != "window" {
+		t.Fatalf("direct calls = %+v, want one window job", direct)
+	}
+	if direct[0].Params["op"] != "close" {
+		t.Fatalf("close params = %+v", direct[0].Params)
+	}
+	if direct[0].Session != sessionlessSessionID(910) {
+		t.Fatalf("close rode %q, want window 910", direct[0].Session)
+	}
+	if calls := m.d.(*fakeClient).all("window"); len(calls) != 0 {
+		t.Fatalf("session-channel window jobs = %+v, want none", calls)
+	}
+}
+
 func TestCloseWindowRejectsBothSelectors(t *testing.T) {
 	f := closeFake(closeRows("1.0.22", "s1"), closeWindow(900, "s1"), closeWindow(910))
 	m := newCloseManager(t, f)

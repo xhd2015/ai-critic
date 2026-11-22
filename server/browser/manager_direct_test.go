@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -66,9 +67,10 @@ func TestDirectEnsureFailsOverWhenPinnedWindowClosed(t *testing.T) {
 	}
 }
 
-// With every remaining window claimed by a session track, failover keeps the
-// "window gone" error instead of hijacking another driver's window.
-func TestDirectEnsureKeepsErrorWhenNoFreeWindow(t *testing.T) {
+// With every remaining window claimed by a session track, failover takes one
+// over. A page that refuses forever is worse than a taken-over window: the rail
+// has nothing to click and Retry repeats the same refusal.
+func TestDirectEnsureTakesOverClaimedWindow(t *testing.T) {
 	f := directFake()
 	m := newTestManager(t, f)
 	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.27", DirectSupported: true})
@@ -77,19 +79,189 @@ func TestDirectEnsureKeepsErrorWhenNoFreeWindow(t *testing.T) {
 		`{"window_id":10,"type":"normal","focused":true,"width":1280,"height":900,"state":"normal",` +
 		`"tabs":[{"tab_id":101,"index":0,"title":"go","url":"http://127.0.0.1:43761/go?session=sess-live","active":true,"capturable":true,"role":"session_page"}]}]}`
 	f.mu.Unlock()
+	fakeDirectWindowInfo(f, 10, 101)
 	m.mu.Lock()
 	m.sessionID = sessionlessSessionID(11)
 	m.connected = false
 	m.windowID = 0
 	m.mu.Unlock()
 
+	if err := m.Ensure(context.Background()); err != nil {
+		t.Fatalf("Ensure error = %v, want a takeover of window 10", err)
+	}
+	if got := m.windowIDValue(); got != 10 {
+		t.Fatalf("window = %d, want 10 (the only remaining window)", got)
+	}
+	if got := m.sessionIDValue(); got != sessionlessSessionID(10) {
+		t.Fatalf("session id = %q, want the taken-over window", got)
+	}
+	if !m.Snapshot().Session.Connected {
+		t.Fatal("expected connected after takeover")
+	}
+}
+
+// Taking over a session window must prefer one already showing a real page: the
+// only other candidate carries ai-critic's own placeholder, and mirroring that
+// yields a blank frame that looks exactly like the failure being repaired.
+func TestDirectEnsurePrefersTakeoverWithContent(t *testing.T) {
+	f := directFake()
+	m := newTestManager(t, f)
+	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.27", DirectSupported: true})
+	f.mu.Lock()
+	f.windowsPayload = `{"type":"windows","version":"1.0.27","features":["all-windows"],"windows":[` +
+		`{"window_id":30,"type":"normal","focused":false,"width":1280,"height":900,"state":"normal",` +
+		`"tabs":[{"tab_id":301,"index":0,"title":"go","url":"http://127.0.0.1:43761/go?session=s1","active":false,"capturable":true,"role":"session_page"},` +
+		`{"tab_id":302,"index":1,"title":"ai-critic","url":"` + directNewWindowURL + `","active":true,"capturable":true,"role":"user"}]},` +
+		`{"window_id":31,"type":"normal","focused":false,"width":1280,"height":900,"state":"normal",` +
+		`"tabs":[{"tab_id":311,"index":0,"title":"go","url":"http://127.0.0.1:43761/go?session=s2","active":false,"capturable":true,"role":"session_page"},` +
+		`{"tab_id":312,"index":1,"title":"Orchestrator","url":"http://127.0.0.1:8422/orchestrator","active":true,"capturable":true,"role":"user"}]}]}`
+	f.mu.Unlock()
+	fakeDirectWindowInfo(f, 31, 312)
+	m.mu.Lock()
+	m.sessionID = sessionlessSessionID(11)
+	m.connected = false
+	m.windowID = 0
+	m.mu.Unlock()
+
+	if err := m.Ensure(context.Background()); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	if got := m.windowIDValue(); got != 31 {
+		t.Fatalf("window = %d, want 31 (the one with a real page)", got)
+	}
+}
+
+// Preferring a window with a real page must not mean taking one away from a live
+// session: a window whose registered session is dead is free in practice.
+func TestDirectEnsurePrefersDeadSessionOverLiveOne(t *testing.T) {
+	f := directFake()
+	m := newTestManager(t, f)
+	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.27", DirectSupported: true})
+	f.mu.Lock()
+	f.windowsPayload = `{"type":"windows","version":"1.0.27","features":["all-windows"],"windows":[` +
+		// 40 is live and shows a real page — the tempting one.
+		`{"window_id":40,"type":"normal","focused":false,"width":1280,"height":900,"state":"normal","session_ids":["sess-live"],` +
+		`"tabs":[{"tab_id":401,"index":0,"title":"go","url":"http://127.0.0.1:43761/go?session=sess-live","active":false,"capturable":true,"role":"session_page"},` +
+		`{"tab_id":402,"index":1,"title":"Orchestrator","url":"http://127.0.0.1:8422/orchestrator","active":true,"capturable":true,"role":"user"}]},` +
+		// 41 belongs to a dead session and shows a real page too.
+		`{"window_id":41,"type":"normal","focused":false,"width":1280,"height":900,"state":"normal","session_ids":["sess-dead"],` +
+		`"tabs":[{"tab_id":411,"index":0,"title":"go","url":"http://127.0.0.1:43761/go?session=sess-dead","active":false,"capturable":true,"role":"session_page"},` +
+		`{"tab_id":412,"index":1,"title":"Terminal","url":"http://127.0.0.1:8422/terminal","active":true,"capturable":true,"role":"user"}]}]}`
+	f.rows = []sessionRow{
+		{SessionID: "sess-live", Extension: extensionInfo{Connected: true, Version: "1.0.30"}, SessionPageCount: 1},
+		{SessionID: "sess-dead", Extension: extensionInfo{Connected: false, Version: "1.0.30"}, SessionPageCount: 1},
+	}
+	f.mu.Unlock()
+	fakeDirectWindowInfo(f, 41, 412)
+	m.mu.Lock()
+	m.sessionID = sessionlessSessionID(11)
+	m.connected = false
+	m.windowID = 0
+	m.mu.Unlock()
+
+	if err := m.Ensure(context.Background()); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	if got := m.windowIDValue(); got != 41 {
+		t.Fatalf("window = %d, want 41 (its session is dead; 40 is live)", got)
+	}
+}
+
+// A daemon that answers but has no windows left is recoverable on an explicit
+// action: reopen one instead of surfacing a permanent error.
+func TestDirectEnsureReopensWhenNoWindowsLeft(t *testing.T) {
+	f := directFake()
+	m := newTestManager(t, f)
+	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.27", DirectSupported: true})
+	f.mu.Lock()
+	f.windowsPayload = `{"type":"windows","version":"1.0.27","features":["all-windows"],"windows":[]}`
+	f.mu.Unlock()
+	opened := 0
+	m.windowOpener = func(ctx context.Context, url string) error {
+		opened++
+		f.mu.Lock()
+		f.windowsPayload = `{"type":"windows","version":"1.0.27","features":["all-windows"],"windows":[` +
+			`{"window_id":21,"type":"normal","width":1280,"height":900,"state":"normal",` +
+			`"tabs":[{"tab_id":201,"index":0,"title":"ai-critic","url":"data:text/html,ok","active":true,"capturable":true}]}]}`
+		f.mu.Unlock()
+		return nil
+	}
+	fakeDirectWindowInfo(f, 21, 201)
+	m.mu.Lock()
+	m.sessionID = sessionlessSessionID(11)
+	m.connected = false
+	m.mu.Unlock()
+
+	if err := m.ensureLocked(context.Background(), true); err != nil {
+		t.Fatalf("ensureLocked(allowOpen) error = %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("windowOpener calls = %d, want 1", opened)
+	}
+	if got := m.windowIDValue(); got != 21 {
+		t.Fatalf("window = %d, want the reopened window 21", got)
+	}
+}
+
+// A passive poll must not launch Chrome: it reports the recoverable state so the
+// page can offer a start action instead of popping a window unasked.
+func TestDirectEnsureNoWindowsWithoutAllowOpen(t *testing.T) {
+	f := directFake()
+	m := newTestManager(t, f)
+	m.recordDaemon(&daemonHealth{OK: true, Version: "1.0.27", DirectSupported: true})
+	f.mu.Lock()
+	f.windowsPayload = `{"type":"windows","version":"1.0.27","features":["all-windows"],"windows":[]}`
+	f.mu.Unlock()
+	m.mu.Lock()
+	m.sessionID = sessionlessSessionID(11)
+	m.connected = false
+	m.mu.Unlock()
+	opened := 0
+	m.windowOpener = func(ctx context.Context, url string) error {
+		opened++
+		return nil
+	}
+
 	err := m.Ensure(context.Background())
-	if !errors.Is(err, errWindowGone) {
-		t.Fatalf("Ensure error = %v, want errWindowGone (only a claimed window remains)", err)
+	if !errors.Is(err, errNoChromeWindows) {
+		t.Fatalf("Ensure error = %v, want errNoChromeWindows", err)
 	}
-	if got := m.sessionIDValue(); got != sessionlessSessionID(11) {
-		t.Fatalf("session id changed to %q; failover must not steal window 10", got)
+	if opened != 0 {
+		t.Fatalf("windowOpener calls = %d, want 0 for a passive poll", opened)
 	}
+}
+
+// fakeDirectWindowInfo teaches the fake to answer direct info/window jobs for a
+// window the test adopts, so a takeover can resolve tabs like a real window. The
+// stock fixture only knows windows 11 and 12 and fails every other window.
+func fakeDirectWindowInfo(f *fakeClient, id, tabID int64) {
+	f.mu.Lock()
+	prevHandle := f.directHandle
+	f.directHandle = func(call fakeCall) (json.RawMessage, bool) {
+		if call.Session == sessionlessSessionID(id) {
+			switch call.Type {
+			case "info":
+				return json.RawMessage(fmt.Sprintf(
+					`{"type":"info","window_id":%d,"direct":true,"tabs":[{"id":%d,"index":0,"title":"ai-critic","url":"data:text/html,ok","active":true,"role":"user"}]}`,
+					id, tabID)), true
+			case "window":
+				return json.RawMessage(fmt.Sprintf(`{"window_id":%d,"window":{"left":0,"top":0,"width":1280,"height":1000}}`, id)), true
+			case "eval":
+				return json.RawMessage(`{"value":"{\"w\":1280,\"h\":900,\"dpr\":2}"}`), true
+			}
+		}
+		if prevHandle != nil {
+			return prevHandle(call)
+		}
+		return nil, false
+	}
+	f.directErrFor = func(call fakeCall) error {
+		if call.Session == sessionlessSessionID(id) {
+			return nil
+		}
+		return errWindowGone
+	}
+	f.mu.Unlock()
 }
 
 func directFake() *fakeClient {

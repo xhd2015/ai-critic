@@ -133,8 +133,7 @@ func (m *Manager) SweepWindows(ctx context.Context, dryRun bool) (*SweepWindowsR
 	}
 
 	for _, windowID := range plan.closeWindows {
-		params := map[string]any{"op": "close", "window_id": windowID}
-		if _, err := m.jobIn(ctx, plan.anchor, 0, "window", params, 20*time.Second); err != nil {
+		if err := m.closeWindowJob(ctx, plan.anchor, windowID); err != nil {
 			if !m.sweepTargetGone(ctx, plan.anchor, windowID, 0) {
 				return fail(fmt.Errorf("close Chrome window %d: %w", windowID, err))
 			}
@@ -158,7 +157,7 @@ func (m *Manager) SweepWindows(ctx context.Context, dryRun bool) (*SweepWindowsR
 // closes windows and tabs under the daemon all the time; a sweep must not stop
 // half-done because a window the person just closed is still in its plan.
 func (m *Manager) sweepTargetGone(ctx context.Context, anchor string, windowID, tabID int64) bool {
-	payload, err := m.fetchWindows(ctx, anchor)
+	payload, err := m.windowsForProbe(ctx, anchor)
 	if err != nil {
 		return false
 	}

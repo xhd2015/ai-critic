@@ -103,27 +103,36 @@ func (m *Manager) CloseWindow(ctx context.Context, windowID int64, sessionID str
 	targetCurrent := closeTargetIsCurrent(target, current, currentWindow)
 	before := targetSessions(target, current, currentWindow)
 
+	// The close itself needs no anchor on a direct-capable daemon. Only a
+	// takeover of the current session does, because that is a session switch.
 	anchor := ""
 	fallback := ""
 	if targetCurrent {
 		fallback = pickCloseFallback(current, rows, payload, before, target.WindowID)
-		if fallback == "" {
+		if fallback == "" && !m.directSupportedValue() {
 			return nil, errWindowCloseCurrent
 		}
 		anchor = fallback
-	} else {
+	} else if !m.directSupportedValue() {
 		anchor = pickCloseAnchor(current, rows, payload, before)
 		if anchor == "" {
 			return nil, errWindowCloseNoAnchor
 		}
 	}
 
-	params := map[string]any{"op": "close", "window_id": target.WindowID}
-	if _, err := m.jobIn(ctx, anchor, 0, "window", params, 20*time.Second); err != nil {
+	if err := m.closeWindowJob(ctx, anchor, target.WindowID); err != nil {
 		return nil, fmt.Errorf("close Chrome window %d: %w", target.WindowID, err)
 	}
 
 	result := &CloseWindowResult{WindowID: target.WindowID, SessionID: targetSession}
+	if targetCurrent && fallback == "" {
+		// Direct rail: no session to take over, so re-resolve a window instead of
+		// leaving the manager pointing at the one just removed.
+		if err := m.recoverAfterCurrentWindowClosed(ctx); err != nil {
+			return result, err
+		}
+		return result, nil
+	}
 	if targetCurrent {
 		if err := m.SwitchSession(ctx, fallback, false); err != nil {
 			// The window is gone even if the takeover failed. Say so plainly so the
@@ -135,9 +144,16 @@ func (m *Manager) CloseWindow(ctx context.Context, windowID int64, sessionID str
 	return result, nil
 }
 
-// fetchWindowsForClose asks a close-capable live session first. A stale anchor
-// running 1.0.21 would answer with a feature list that cannot authorize close.
+// fetchWindowsForClose lists every window for a close gesture. The instance
+// channel comes first: /v1/windows answers whether or not a /go page exists, so
+// a browser whose last session page was closed can still be repaired. Only a
+// daemon without direct-window-v1 falls back to the session channel.
 func (m *Manager) fetchWindowsForClose(ctx context.Context, rows []sessionRow) (*windowsPayload, error) {
+	if m.directSupportedValue() {
+		if payload, err := m.d.windowsDirect(ctx); err == nil {
+			return payload, nil
+		}
+	}
 	anchor := pickWindowCloseAnchor(m.sessionIDValue(), rows, m.connectedValue())
 	if anchor == "" {
 		anchor = pickAllWindowsAnchor(m.sessionIDValue(), rows, m.connectedValue())
@@ -146,6 +162,22 @@ func (m *Manager) fetchWindowsForClose(ctx context.Context, rows []sessionRow) (
 		return nil, errNoLiveWindow
 	}
 	return m.fetchWindows(ctx, anchor)
+}
+
+// closeWindowJob removes one window over the instance channel, falling back to
+// the session channel for an extension without direct-window-v1. anchor may be
+// empty: a direct job needs no session, and that is the whole point of this
+// path — closing a window must not require a /go page to be open somewhere.
+func (m *Manager) closeWindowJob(ctx context.Context, anchor string, windowID int64) error {
+	if m.directSupportedValue() {
+		_, err := m.d.jobDirect(ctx, windowID, 0, "window", map[string]any{"op": "close"}, 20*time.Second)
+		return err
+	}
+	if anchor == "" {
+		return errNoLiveWindow
+	}
+	_, err := m.jobIn(ctx, anchor, 0, "window", map[string]any{"op": "close", "window_id": windowID}, 20*time.Second)
+	return err
 }
 
 func pickWindowCloseAnchor(current string, rows []sessionRow, connected bool) string {

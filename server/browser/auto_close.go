@@ -323,9 +323,14 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 		return nil, nil
 	}
 
-	anchor := pickWindowCloseAnchor(m.sessionIDValue(), rows, m.connectedValue())
-	if anchor == "" {
-		return nil, nil
+	// A session channel anchor is only needed by an extension without
+	// direct-window-v1; the instance channel closes windows with no /go page.
+	anchor := ""
+	if !m.directSupportedValue() {
+		anchor = pickWindowCloseAnchor(m.sessionIDValue(), rows, m.connectedValue())
+		if anchor == "" {
+			return nil, nil
+		}
 	}
 	keep := map[int64]bool{}
 	if cur := m.windowIDValue(); cur != 0 {
@@ -335,8 +340,10 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 		keep[win.WindowID] = true
 	}
 	// The anchor's own window carries the transport the close job travels on.
-	if win := payload.windowForSession(anchor); win != nil {
-		keep[win.WindowID] = true
+	if anchor != "" {
+		if win := payload.windowForSession(anchor); win != nil {
+			keep[win.WindowID] = true
+		}
 	}
 
 	m.autoMu.Lock()
@@ -354,8 +361,7 @@ func (m *Manager) AutoCloseTick(ctx context.Context) ([]AutoCloseRecord, error) 
 		if win := payload.windowByID(candidate.win.WindowID); win == nil || win.Focused {
 			continue
 		}
-		params := map[string]any{"op": "close", "window_id": candidate.win.WindowID}
-		if _, err := m.jobIn(ctx, anchor, 0, "window", params, 20*time.Second); err != nil {
+		if err := m.closeWindowJob(ctx, anchor, candidate.win.WindowID); err != nil {
 			// A window Chrome already removed is not a failure worth stopping
 			// for; anything else leaves the window for the next tick.
 			continue

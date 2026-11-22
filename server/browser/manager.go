@@ -258,6 +258,10 @@ var (
 	defaultMgr  *Manager
 )
 
+// errNoChromeWindows means Chrome has no window left. It is a recoverable state
+// (the next explicit action reopens one), not a broken configuration.
+var errNoChromeWindows = errors.New("no Chrome window is open; start a window to continue")
+
 // Default returns the process-wide manager. The page, the API, and the capture
 // loop must share one instance or two capture loops fight over the window.
 func Default() *Manager {
@@ -686,21 +690,43 @@ func (m *Manager) ensureDirectWindow(ctx context.Context, allowOpen bool) error 
 
 	payload, err := m.d.windowsDirect(ctx)
 	if err != nil {
-		return fmt.Errorf("direct window list: %w", err)
+		// A daemon that cannot list windows is not a dead end: an explicit
+		// action may still reopen Chrome. Without allowOpen the page stays
+		// offline and offers exactly that action.
+		if !allowOpen {
+			return fmt.Errorf("direct window list: %w", err)
+		}
+		if payload, err = m.openDirectRecoveryWindow(ctx); err != nil {
+			return fmt.Errorf("direct window list: %w", err)
+		}
 	}
 	if len(payload.Windows) == 0 {
-		return fmt.Errorf("direct rail: no Chrome windows found")
+		// Every window was closed. That is a normal state (Chrome quits with its
+		// last window), not a permanent failure: reopen one on an explicit action.
+		if !allowOpen {
+			return errNoChromeWindows
+		}
+		if payload, err = m.openDirectRecoveryWindow(ctx); err != nil {
+			return err
+		}
 	}
 
 	var target *windowSnapshot
 	if want, ok := windowIDFromSessionlessID(sessionID); ok {
 		target = payload.windowByID(want)
 		if target == nil {
-			// The window this direct session was pinned to is closed (closed
-			// by hand in Chrome). Fail over to another free window instead of
-			// staying dead on the gone id; with no free window, keep the
-			// "window gone" error and let the rail pick a window.
-			target = pickFreeDirectWindow(payload)
+			// The window this direct session was pinned to is gone. Fail over,
+			// preferring a window that hosts no session page; if every remaining
+			// window drives another session, taking one over is still better than
+			// a page that can never recover.
+			live := m.liveSessions(ctx)
+			target, _ = pickDirectCandidateAmong(payload, live)
+			if target == nil && allowOpen {
+				if refreshed, openErr := m.openDirectRecoveryWindow(ctx); openErr == nil {
+					payload = refreshed
+					target, _ = pickDirectCandidateAmong(payload, live)
+				}
+			}
 			if target == nil {
 				return fmt.Errorf("%w; the remaining Chrome windows are driven by other sessions", errWindowGone)
 			}
@@ -745,12 +771,120 @@ func (m *Manager) ensureDirectWindow(ctx context.Context, allowOpen bool) error 
 // pickDirectWindow chooses a window to drive when the caller did not name one:
 // the previous window if it still exists, else the focused window, else the
 // first normal window that has a capturable tab, else the first normal window.
-// pickFreeDirectWindow is the failover picker for a direct session whose window
-// was closed by hand: the focused free window, else the first normal free
-// window that has a capturable tab. "Free" means it hosts no session page —
-// a window with a /go anchor belongs to a live session track and failover must
-// not hijack it. With no free window it returns nil so the caller keeps the
-// "window gone" error and the rail stays the way to pick.
+// pickDirectCandidate chooses a window for a direct session whose own window
+// is gone. It prefers a window that hosts no /go page, because taking a session
+// window over fights the session track; but when every remaining window drives
+// another session it still returns one, and reports that it did. Returning nil
+// there would be an unrecoverable page: the rail has nothing to click and Retry
+// repeats the same refusal forever.
+func pickDirectCandidate(payload *windowsPayload) (*windowSnapshot, bool) {
+	return pickDirectCandidateAmong(payload, nil)
+}
+
+// pickDirectCandidateAmong is pickDirectCandidate with a set of sessions that are
+// still live. Taking over a live session's window interrupts somebody's work;
+// a window whose session page belongs to a dead session is free in practice, so
+// it is preferred before any live one.
+func pickDirectCandidateAmong(payload *windowsPayload, live map[string]bool) (*windowSnapshot, bool) {
+	if w := pickFreeDirectWindow(payload); w != nil {
+		return w, false
+	}
+	// Every window hosts a session page, so one has to be taken over. Prefer the
+	// one already showing a real page: taking over a window whose only capturable
+	// tab is ai-critic's own data: placeholder mirrors a blank rectangle, which
+	// looks exactly like the failure the takeover was meant to repair.
+	var freeContent, freeAny, liveContent, liveAny *windowSnapshot
+	for i := range payload.Windows {
+		w := &payload.Windows[i]
+		if !drivableWindow(w) || w.WindowID == 0 {
+			continue
+		}
+		claimed := windowHasLiveSession(w, live)
+		content := hasDrivableContent(w)
+		if w.Focused && !claimed {
+			return w, true
+		}
+		switch {
+		case !claimed && content:
+			if freeContent == nil {
+				freeContent = w
+			}
+		case !claimed:
+			if freeAny == nil {
+				freeAny = w
+			}
+		case content:
+			if liveContent == nil {
+				liveContent = w
+			}
+		default:
+			if liveAny == nil {
+				liveAny = w
+			}
+		}
+	}
+	for _, w := range []*windowSnapshot{freeContent, freeAny, liveContent, liveAny} {
+		if w != nil {
+			return w, true
+		}
+	}
+	for i := range payload.Windows {
+		if w := &payload.Windows[i]; drivableWindow(w) && w.WindowID != 0 {
+			return w, true
+		}
+	}
+	return nil, true
+}
+
+// liveSessions reports which registered sessions still have a connected
+// extension, so a failover can prefer a window nobody is driving. A cheap
+// lookup: a failed listing simply yields an empty set.
+func (m *Manager) liveSessions(ctx context.Context) map[string]bool {
+	rows, err := m.d.sessions(ctx)
+	if err != nil {
+		return nil
+	}
+	live := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		if row.Extension.Connected && row.SessionPageCount > 0 {
+			live[row.SessionID] = true
+		}
+	}
+	return live
+}
+
+// windowHasLiveSession reports whether any session registered in this window is
+// still live. An unknown set (nil) counts as "not live": the caller had no
+// session rows to judge by.
+func windowHasLiveSession(w *windowSnapshot, live map[string]bool) bool {
+	for _, sid := range w.SessionIDs {
+		if live[sid] {
+			return true
+		}
+	}
+	return false
+}
+
+// hasDrivableContent reports whether a window has a capturable tab that is a real
+// page rather than the placeholder ai-critic itself opened.
+func hasDrivableContent(w *windowSnapshot) bool {
+	for _, t := range w.Tabs {
+		if t.Role == "session_page" || isSessionPageURL(t.URL) {
+			continue
+		}
+		if t.URL == directNewWindowURL || t.URL == contentPlaceholderURL() {
+			continue
+		}
+		if t.Capturable || isContentURL(t.URL) {
+			return true
+		}
+	}
+	return false
+}
+
+// pickFreeDirectWindow prefers a window with no /go page: the focused one, else
+// the first normal free window that has a capturable tab. It returns nil when
+// every window hosts a session page; pickDirectCandidate is the escape hatch.
 func pickFreeDirectWindow(payload *windowsPayload) *windowSnapshot {
 	var fallback *windowSnapshot
 	for i := range payload.Windows {
@@ -771,6 +905,91 @@ func pickFreeDirectWindow(payload *windowsPayload) *windowSnapshot {
 		}
 	}
 	return fallback
+}
+
+// openDirectRecoveryWindow opens one plain Chrome window and waits until the
+// extension lists it, so a caller with no windows can adopt it immediately.
+func (m *Manager) openDirectRecoveryWindow(ctx context.Context) (*windowsPayload, error) {
+	if m.windowOpener == nil {
+		return nil, errNoChromeWindows
+	}
+	before, err := m.d.windowsDirect(ctx)
+	known := map[int64]bool{}
+	if err == nil {
+		for _, w := range before.Windows {
+			known[w.WindowID] = true
+		}
+	}
+	if err := m.windowOpener(ctx, directNewWindowURL); err != nil {
+		return nil, fmt.Errorf("open a new Chrome window: %w", err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	var last error
+	for {
+		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		payload, probeErr := m.d.windowsDirect(probeCtx)
+		cancel()
+		if probeErr == nil {
+			for _, w := range payload.Windows {
+				if w.WindowID == 0 || known[w.WindowID] {
+					continue
+				}
+				for _, t := range w.Tabs {
+					if t.Capturable || isContentURL(t.URL) {
+						return payload, nil
+					}
+				}
+			}
+			last = errNoChromeWindows
+		} else {
+			last = probeErr
+		}
+		if time.Now().After(deadline) {
+			if last == nil {
+				last = errNoChromeWindows
+			}
+			return nil, last
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
+}
+
+// recoverAfterCurrentWindowClosed re-resolves a window after the current one was
+// closed, so the manager never keeps driving an id that is gone. It stays on the
+// direct rail on purpose: the caller holds attachMu, which the session-track
+// fallback (SwitchWindow) would block on.
+func (m *Manager) recoverAfterCurrentWindowClosed(ctx context.Context) error {
+	m.mu.Lock()
+	m.connected = false
+	m.windowID = 0
+	m.contentTabID = 0
+	m.activeTabID = 0
+	m.tabs = nil
+	m.url = ""
+	m.presetApplied = false
+	m.mu.Unlock()
+	if m.hub != nil {
+		m.hub.kick()
+	}
+	if !m.directSupportedValue() {
+		return nil
+	}
+	if err := m.ensureDirectWindow(ctx, true); err != nil {
+		m.setError(err)
+		return err
+	}
+	if err := m.ensureWindow(ctx); err != nil {
+		m.setError(err)
+		return err
+	}
+	m.mu.Lock()
+	m.ensuredAt = time.Now()
+	m.mu.Unlock()
+	return nil
 }
 
 func hostsSessionPage(w *windowSnapshot) bool {

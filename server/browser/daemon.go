@@ -265,7 +265,56 @@ func (d *daemon) windowsDirect(ctx context.Context) (*windowsPayload, error) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("decode windows: %w", err)
 	}
+	// /v1/windows answers about windows, not about capabilities: the feature list
+	// a session-channel job returns is missing here. Without it window-close and
+	// auto-close would see "unsupported" on every direct listing. The connected
+	// extensions report the same list on /v1/connections, so adopt theirs.
+	if len(payload.Features) == 0 {
+		if features, ok := d.connectedFeatures(ctx); ok {
+			payload.Features = features
+		}
+	}
 	return &payload, nil
+}
+
+// directConnections is one entry of GET /v1/connections.
+type directConnections struct {
+	Connections []struct {
+		InstanceID string   `json:"instance_id"`
+		Version    string   `json:"version"`
+		Features   []string `json:"features"`
+		Connected  bool     `json:"connected"`
+	} `json:"connections"`
+}
+
+// connectedFeatures unions the feature lists of the extensions currently linked
+// to the daemon. It reports false when no instance is connected, so a caller
+// keeps whatever it had instead of assuming support.
+func (d *daemon) connectedFeatures(ctx context.Context) ([]string, bool) {
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var out directConnections
+	if err := d.getJSON(probeCtx, "/v1/connections", &out); err != nil {
+		return nil, false
+	}
+	seen := map[string]bool{}
+	var features []string
+	for _, conn := range out.Connections {
+		if !conn.Connected {
+			continue
+		}
+		for _, f := range conn.Features {
+			if f == "" || seen[f] {
+				continue
+			}
+			seen[f] = true
+			features = append(features, f)
+		}
+	}
+	if len(features) == 0 {
+		return nil, false
+	}
+	return features, true
 }
 
 func (d *daemon) getJSON(ctx context.Context, path string, v any) error {
